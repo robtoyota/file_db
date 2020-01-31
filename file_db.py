@@ -6,6 +6,14 @@ import sys
 def main(config_file):
 	# Get the processes started
 	p = Process(config_file)
+
+	# Install the postgres tables, functions, etc
+	p.install_sql()
+
+	# Reset the crawling schedules in postgres
+	p.reset_schedules()
+
+	# Run the program
 	p.start_crawling()
 
 
