@@ -1,7 +1,7 @@
 import os
 import platform
 import datetime
-import FilesDbDAL
+import FileDbDAL
 import time
 
 
@@ -58,7 +58,7 @@ class Directory:
 		cur.close()
 
 		# Insert the directory into the control table to be crawled
-		dc = FilesDbDAL.DirectoryCrawl()
+		dc = FileDbDAL.DirectoryCrawl()
 		dc.dir_id = self.id
 		dc.insert_new_directory_to_crawl(pg, self.dir_path)
 

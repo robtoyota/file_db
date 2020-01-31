@@ -1,5 +1,5 @@
 import multiprocessing as MP
-import FilesDbDAL
+import FileDbDAL
 from Util.Config import Config
 import Process.UserInterface as UserInterface
 import time
@@ -173,25 +173,25 @@ class Process:
 		print("Done crawling")
 
 	def install_sql(self):
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			# Install everything
 			print("Installing database DDLs")
-			FilesDbDAL.Install(pg, drop_tables=False)
+			FileDbDAL.Install(pg, drop_tables=False)
 			print("Installs are complete")
 
 	def reset_schedules(self):
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			# Clean out data
 			print("Resetting all tasks...")
-			FilesDbDAL.SQLUtil.util_reset_process_tasks(pg)
+			FileDbDAL.SQLUtil.util_reset_process_tasks(pg)
 			print("Tasks are reset")
 
 	# Populate the initial queue from the drives
 	def crawl_drives(self, crawl_dir_queue):
 		print("Initializing the crawl with the drives")
-		pg = FilesDbDAL.Pg.pg_connect(self.config)
+		pg = FileDbDAL.Pg.pg_connect(self.config)
 		# Get the list of drives
-		drives = FilesDbDAL.DirectoryCrawl.get_drives_to_crawl(pg)
+		drives = FileDbDAL.DirectoryCrawl.get_drives_to_crawl(pg)
 
 		# Put the drives into the queue to be crawled
 		for drive in drives:
@@ -201,7 +201,7 @@ class Process:
 
 	# Manage the directory crawling
 	def manage_crawl_dirs(self, queue_maximums, crawl_dir_queue, empty_queue_sleep: float = 15):
-		pg = FilesDbDAL.Pg.pg_connect(self.config)
+		pg = FileDbDAL.Pg.pg_connect(self.config)
 
 		# Populate the queues for the threads
 		while True:
@@ -215,7 +215,7 @@ class Process:
 				process_id = random.randint(1, 2 ** 16)
 				num_dirs = (queue_maximums['crawl_dir_queue']) - crawl_dir_queue.qsize()
 				# This function retrieves the dirs from the DB and puts them in the queue, then returns rowcount
-				cursor_rowcount = FilesDbDAL.DirectoryCrawl.get_dirs_to_crawl(
+				cursor_rowcount = FileDbDAL.DirectoryCrawl.get_dirs_to_crawl(
 					pg,
 					crawl_dir_queue,
 					process_id,
@@ -277,7 +277,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			while True:
 				try:
 					time.sleep(0.2)  # Give the queue time to fill up
@@ -295,7 +295,7 @@ class Process:
 
 					# Reset the timer
 					last_flush = time.time()
-					FilesDbDAL.DirectoryCrawl.stage_dir_contents(pg, insert_dir_contents_queue)
+					FileDbDAL.DirectoryCrawl.stage_dir_contents(pg, insert_dir_contents_queue)
 				except:  # Ugh
 					print("-" * 60)
 					print("Exception occurred in insert_dir_contents")
@@ -308,7 +308,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			while True:
 				time.sleep(0.2)  # Give the staging tables time to fill up
 
@@ -317,7 +317,7 @@ class Process:
 						# Reset the timer
 						last_flush = time.time()
 						# Process the dir's contents that were staged
-						FilesDbDAL.DirectoryCrawl.process_staged_dir_contents(pg)
+						FileDbDAL.DirectoryCrawl.process_staged_dir_contents(pg)
 				except:  # Ugh
 					print("-" * 60)
 					print("Exception occurred in finalize_dir_contents")
@@ -327,7 +327,7 @@ class Process:
 
 	# Manage the file hashing queue
 	def manage_hash_queue(self, queue_maximums, hash_files_queue, empty_queue_sleep):
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			# Populate the queues for the threads
 			while True:
 				# Output debug info
@@ -339,7 +339,7 @@ class Process:
 					# Get the list of files to hash, and add them to a queue
 					process_id = random.randint(1, 2 ** 16)
 					num_hashes = (queue_maximums['hash_files_queue']) - hash_files_queue.qsize()
-					cursor_rowcount = FilesDbDAL.DirectoryCrawl.get_files_to_hash(
+					cursor_rowcount = FileDbDAL.DirectoryCrawl.get_files_to_hash(
 						pg,
 						hash_files_queue,
 						process_id,
@@ -401,7 +401,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FilesDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg.pg_connect(self.config) as pg:
 			while True:
 				try:
 					time.sleep(0.2)  # Give the queue time to fill up
@@ -421,10 +421,10 @@ class Process:
 					last_flush = time.time()
 
 					# If all is ready to flush to the DB, then perform the dump
-					FilesDbDAL.DirectoryCrawl.stage_hashes(pg, load_hashes_queue)
+					FileDbDAL.DirectoryCrawl.stage_hashes(pg, load_hashes_queue)
 
 					# Finally, process the staged hashes
-					FilesDbDAL.DirectoryCrawl.process_staged_hashes(pg)
+					FileDbDAL.DirectoryCrawl.process_staged_hashes(pg)
 
 				except:  # Ugh
 					print("-" * 60)

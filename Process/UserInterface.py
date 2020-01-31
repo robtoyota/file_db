@@ -1,6 +1,6 @@
 import multiprocessing as MP
-from FilesDbDAL import Pg
-from FilesDbDAL.Search import Search
+from FileDbDAL import Pg
+from FileDbDAL.Search import Search
 import time
 import sys
 import traceback

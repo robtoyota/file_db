@@ -1,11 +1,11 @@
-from FilesDbDAL.Pg import Pg
-from FilesDbDAL.DirectoryCrawl import DirectoryCrawl
-from FilesDbDAL.File import File
-from FilesDbDAL.Directory import Directory
-from FilesDbDAL.Hash import Hash
-from FilesDbDAL.SQLUtil import SQLUtil
-from FilesDbDAL.Search import Search
-from FilesDbDAL.FileHandler import FileHandler
+from FileDbDAL.Pg import Pg
+from FileDbDAL.DirectoryCrawl import DirectoryCrawl
+from FileDbDAL.File import File
+from FileDbDAL.Directory import Directory
+from FileDbDAL.Hash import Hash
+from FileDbDAL.SQLUtil import SQLUtil
+from FileDbDAL.Search import Search
+from FileDbDAL.FileHandler import FileHandler
 
 
 class Install:

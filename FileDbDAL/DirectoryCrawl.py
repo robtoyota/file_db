@@ -1,6 +1,6 @@
-from FilesDbDAL.Directory import Directory
-from FilesDbDAL.File import File
-from FilesDbDAL.Hash import Hash
+from FileDbDAL.Directory import Directory
+from FileDbDAL.File import File
+from FileDbDAL.Hash import Hash
 import os
 import psycopg2.extras
 import traceback

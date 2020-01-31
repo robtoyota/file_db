@@ -1,4 +1,4 @@
-from FilesDbDAL.Pg import Pg
+from FileDbDAL.Pg import Pg
 from PIL import Image
 from tkinter import *
 
