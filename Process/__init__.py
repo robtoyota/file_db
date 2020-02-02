@@ -1,7 +1,6 @@
 import multiprocessing as MP
 import FileDbDAL
 from Util.Config import Config
-import Process.UserInterface as UserInterface
 import time
 import sys
 import traceback
@@ -58,10 +57,6 @@ class Process:
 		try:
 			### Start up the process to get the list of directories to call
 			self.crawl_drives(self.queues['crawl_dir_queue'])
-
-			### Start up the user interface, to accept commands
-			ui = UserInterface
-			processes += [MP.Process(target=ui.UserInterface, args=())]
 
 			### Start up the process to get the list of directories to call
 			# TODO: Make sure that all of these processes get created!

@@ -1,49 +1,23 @@
+from cmd import Cmd
+from Util.Config import Config
 import multiprocessing as MP
-from FileDbDAL import Pg
 from FileDbDAL.Search import Search
 import time
 import sys
 import traceback
 
 
-class UserInterface:
-	def __init__(self):
-		while True:
-			try:
-				# Get the user input
-				print(sys.stdin)
-				user_input = input('$ ')
+class UserInterface(Cmd):
+	# https://code-maven.com/interactive-shell-with-cmd-in-python
 
-				# Parse the input to get the command
-				try:
-					cmd, args = user_input.split(' ', 1)  # First try extract both a cmd and arg
-				except ValueError:  # If there are no spaces, assume it is only a cmd
-					cmd = user_input
-					args = ''
+	prompt = 'file_db> '
+	intro = "Type ? to list commands"
 
-				cmd = cmd.strip()
-				args = args.strip()
+	def __init__(self, config_file):
+		super().__init__()
+		# Load the config
+		self.config = Config.load_config(config_file)
 
-				if cmd == "search":
-					self.search_cmd(args)
-				elif cmd == "hash_file":
-					self.hash_file_cmd(args)
-				elif cmd == "hash_dir":
-					self.hash_dir_cmd(args)
-				elif cmd == "scrape_dir":
-					self.scrape_dir_cmd(args)
-				elif cmd == "scrape_file":
-					self.scrape_file_cmd(args)
-				elif cmd == "reschedule_dir":
-					self.reschedule_dir_cmd(args)
-
-			except:  # Ugh
-				print("-" * 60)
-				print("Exception occurred in UserInterface")
-				print(str(sys.exc_info()))
-				traceback.print_exc(file=sys.stdout)
-				print("-" * 60)
-				break
 
 	def search_cmd(self, args):
 		try:
@@ -90,16 +64,20 @@ class UserInterface:
 
 
 	def search_name(self, name):
-		Search.print_search(self.pg, 'search_name', {'name': name})
+		pass
+		# Search.print_search(self.pg, 'search_name', {'name': name})
 
 	def search_name_file(self, name):
-		Search.print_search(self.pg, 'search_name_file', {'name': name})
+		pass
+		# Search.print_search(self.pg, 'search_name_file', {'name': name})
 
 	def search_name_dir(self, name):
-		Search.print_search(self.pg, 'search_name_dir', {'name': name})
+		pass
+		# Search.print_search(self.pg, 'search_name_dir', {'name': name})
 
 	def search_hash(self, hash, hash_algorithm=None):
-		Search.print_search(self.pg, 'search_hash', {'hash': hash, 'hash_algorithm': None})
+		pass
+		# Search.print_search(self.pg, 'search_hash', {'hash': hash, 'hash_algorithm': None})
 
 	def search_duplicate_file(self, path):
 		pass

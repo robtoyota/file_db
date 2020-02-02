@@ -194,7 +194,7 @@ class File:
 			
 			create index if not exists file_stage_dir_id on file_stage (dir_id);
 			create index if not exists file_stage_inserted_by_process_id on file_stage (inserted_by_process_id);
-			""")
+		""")
 		pg.commit()
 		cur.close()
 

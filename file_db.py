@@ -1,9 +1,10 @@
 import FileDbDAL
 from Process import Process
 import sys
+from CLI.UserInterface import UserInterface
 
 
-def main(config_file):
+def server(config_file):
 	# Get the processes started
 	p = Process(config_file)
 
@@ -17,16 +18,31 @@ def main(config_file):
 	p.start_crawling()
 
 
+def ui(config_file):
+	# Get the processes started
+	UserInterface(config_file).cmdloop()
+
+
 if __name__ == '__main__':
-	# Use the default config file location
+	# https://codeburst.io/building-beautiful-command-line-interfaces-with-python-26c7e1bb54df
+
+	# Defaults
 	in_config_file = None
+	in_program_type = "db"
 
 	# Use the user-supplied config file
 	if len(sys.argv) > 1:
 		in_config_file = sys.argv[1]
 
+	# Determine the way the program should be run
+	if len(sys.argv) > 2:
+		in_program_type = sys.argv[2]
+
 	# Call the program
-	main(in_config_file)
+	if in_program_type.lower() == "ui":
+		ui(in_config_file)
+	else:  # == "db"
+		server(in_config_file)
 
 
 

@@ -67,11 +67,11 @@ class DirectoryCrawl:
 		# Mark when the crawling completed
 		self.crawled_on = datetime.now()
 
-		print(
-			f"*- Scraped - "
-			f"f: {len(self.files)}; d: {len(self.subdirs)}; {self.dir_path[0]}: (%s)"
-			% (self.dir_path.count('\\'))
-		)
+		# print(
+		# 	f"*- Scraped - "
+		# 	f"f: {len(self.files)}; d: {len(self.subdirs)}; {self.dir_path[0]}: (%s)"
+		# 	% (self.dir_path.count('\\'))
+		# )
 
 	def iter_content_files(self):
 		for name, file in self.files.items():
@@ -426,7 +426,7 @@ class DirectoryCrawl:
 				# Populate the dirs list with the paths:
 				dirs = []
 				d = None
-				print(f"Crawling {cur.rowcount} dirs")
+				# print(f"Crawling {cur.rowcount} dirs")
 				for row in cur:
 					# Build the Directory object
 
