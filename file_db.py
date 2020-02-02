@@ -1,7 +1,7 @@
 import FileDbDAL
 from Process import Process
 import sys
-from CLI.UserInterface import UserInterface
+from CLI import UserInterface
 
 
 def server(config_file):

@@ -80,6 +80,7 @@ class DuplicateFinder:
 
 		return duplicate_hashes
 
+
 class Hash:
 	def __init__(self, sha1_hash, file_size, duplicate_count):
 		self.sha1_hash = sha1_hash
@@ -104,5 +105,5 @@ class File:
 
 
 if __name__ == '__main__':
-	with Pg.pg_connect() as pg:
+	with Pg() as pg:
 		DuplicateImageBrowser(pg)
