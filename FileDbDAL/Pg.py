@@ -26,4 +26,7 @@ class Pg:
 		return self.connection
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
+		self.close()
+
+	def close(self):
 		self.connection.close()

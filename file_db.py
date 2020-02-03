@@ -1,4 +1,5 @@
-import FileDbDAL
+from FileDbDAL import Pg
+from Util.Config import Config
 from Process import Process
 import sys
 from CLI import UserInterface
@@ -6,7 +7,7 @@ from CLI import UserInterface
 
 def server(config_file):
 	# Get the processes started
-	p = Process(config_file)
+	p = Process(config_file=config_file)
 
 	# Install the postgres tables, functions, etc
 	p.install_sql()
@@ -19,8 +20,12 @@ def server(config_file):
 
 
 def ui(config_file):
-	# Get the processes started
-	UserInterface(config_file).cmdloop()
+	# Load the config
+	config = Config.load_config(config_file)
+	# Connect to the DB
+	with Pg(config) as pg:
+		# Start the UI
+		UserInterface(pg=pg, config_file=config_file).cmdloop()
 
 
 if __name__ == '__main__':
@@ -28,7 +33,7 @@ if __name__ == '__main__':
 
 	# Defaults
 	in_config_file = None
-	in_program_type = "db"
+	in_program_type = "ui"
 
 	# Use the user-supplied config file
 	if len(sys.argv) > 1:
@@ -39,10 +44,12 @@ if __name__ == '__main__':
 		in_program_type = sys.argv[2]
 
 	# Call the program
-	if in_program_type.lower() == "ui":
-		ui(in_config_file)
-	else:  # == "db"
+	if in_program_type.lower() == "db":
 		server(in_config_file)
+	elif in_program_type.lower() == "ui":
+		ui(in_config_file)
+	else:
+		ui(in_config_file)  # Default
 
 
 
