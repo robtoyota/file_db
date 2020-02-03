@@ -168,14 +168,14 @@ class Process:
 		print("Done crawling")
 
 	def install_sql(self):
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			# Install everything
 			print("Installing database DDLs")
 			FileDbDAL.Install(pg, drop_tables=False)
 			print("Installs are complete")
 
 	def reset_schedules(self):
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			# Clean out data
 			print("Resetting all tasks...")
 			FileDbDAL.SQLUtil.util_reset_process_tasks(pg)
@@ -184,55 +184,49 @@ class Process:
 	# Populate the initial queue from the drives
 	def crawl_drives(self, crawl_dir_queue):
 		print("Initializing the crawl with the drives")
-		pg = FileDbDAL.Pg.pg_connect(self.config)
-		# Get the list of drives
-		drives = FileDbDAL.DirectoryCrawl.get_drives_to_crawl(pg)
+		with FileDbDAL.Pg(self.config) as pg:
+			# Get the list of drives
+			drives = FileDbDAL.DirectoryCrawl.get_drives_to_crawl(pg)
 
-		# Put the drives into the queue to be crawled
-		for drive in drives:
-			crawl_dir_queue.put(drive)
-
-		pg.close()
+			# Put the drives into the queue to be crawled
+			for drive in drives:
+				crawl_dir_queue.put(drive)
 
 	# Manage the directory crawling
 	def manage_crawl_dirs(self, queue_maximums, crawl_dir_queue, empty_queue_sleep: float = 15):
-		pg = FileDbDAL.Pg.pg_connect(self.config)
+		with FileDbDAL.Pg(self.config) as pg:
+			# Populate the queues for the threads
+			while True:
+				# Output debug info
+				try:
+					# If the queue is not below the threshold to be refilled, then snooze
+					if crawl_dir_queue.qsize() >= (queue_maximums['crawl_dir_queue'] * 0.50):
+						continue
 
-		# Populate the queues for the threads
-		while True:
-			# Output debug info
-			try:
-				# If the queue is not below the threshold to be refilled, then snooze
-				if crawl_dir_queue.qsize() >= (queue_maximums['crawl_dir_queue'] * 0.50):
-					continue
+					# Get the list of dirs to crawl, and add them to a queue
+					process_id = random.randint(1, 2 ** 16)
+					num_dirs = (queue_maximums['crawl_dir_queue']) - crawl_dir_queue.qsize()
+					# This function retrieves the dirs from the DB and puts them in the queue, then returns rowcount
+					cursor_rowcount = FileDbDAL.DirectoryCrawl.get_dirs_to_crawl(
+						pg,
+						crawl_dir_queue,
+						process_id,
+						num_dirs
+					)
 
-				# Get the list of dirs to crawl, and add them to a queue
-				process_id = random.randint(1, 2 ** 16)
-				num_dirs = (queue_maximums['crawl_dir_queue']) - crawl_dir_queue.qsize()
-				# This function retrieves the dirs from the DB and puts them in the queue, then returns rowcount
-				cursor_rowcount = FileDbDAL.DirectoryCrawl.get_dirs_to_crawl(
-					pg,
-					crawl_dir_queue,
-					process_id,
-					num_dirs
-				)
+					# Check if there are any dirs left to crawl after this batch
+					if cursor_rowcount == 0:
+						# Since there are no
+						time.sleep(empty_queue_sleep)
 
-				# Check if there are any dirs left to crawl after this batch
-				if cursor_rowcount == 0:
-					# Since there are no
-					time.sleep(empty_queue_sleep)
-
-			except:  # Ugh
-				print("-" * 60)
-				print("Exception occurred in manage_crawl_dirs")
-				print(str(sys.exc_info()))
-				traceback.print_exc(file=sys.stdout)
-				print("-" * 60)
-			finally:
-				time.sleep(0.5)
-
-		# dir_proc.join()
-		pg.close()
+				except:  # Ugh
+					print("-" * 60)
+					print("Exception occurred in manage_crawl_dirs")
+					print(str(sys.exc_info()))
+					traceback.print_exc(file=sys.stdout)
+					print("-" * 60)
+				finally:
+					time.sleep(0.5)
 
 	def crawl_dir(self, queue_maximums, crawl_dir_queue, insert_dir_contents_queue):
 		while True:
@@ -272,7 +266,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			while True:
 				try:
 					time.sleep(0.2)  # Give the queue time to fill up
@@ -303,7 +297,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			while True:
 				time.sleep(0.2)  # Give the staging tables time to fill up
 
@@ -322,7 +316,7 @@ class Process:
 
 	# Manage the file hashing queue
 	def manage_hash_queue(self, queue_maximums, hash_files_queue, empty_queue_sleep):
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			# Populate the queues for the threads
 			while True:
 				# Output debug info
@@ -396,7 +390,7 @@ class Process:
 		# Start the timer
 		last_flush = time.time()
 
-		with FileDbDAL.Pg.pg_connect(self.config) as pg:
+		with FileDbDAL.Pg(self.config) as pg:
 			while True:
 				try:
 					time.sleep(0.2)  # Give the queue time to fill up

@@ -11,36 +11,53 @@ import multiprocessing as MP
 
 
 class DirectoryCrawl:
-	def __init__(self, dir_path=None, dir_id=None, last_crawled=None, assigned_process_id=0):
+	def __init__(self, db_row: dict = None):
 		self.next_crawl_seconds = None  # next_crawl_seconds == None: default crawl_frequency
 
-		# Vars from the DB
+		# Default values for the vars from the DB
 		self.id = ""
-		self.dir_id = dir_id
-		self.dir_path = dir_path
+		self.dir_id = None
+		self.dir_path = None
 		self.file_count = None
 		self.subdir_count = None
-		self.next_crawl = ""
-		self.crawl_frequency = 0
-		self.assigned_process_id = 0
-		self.process_assigned_on = ""
-		self.last_crawled = last_crawled
+		self.next_crawl = None
+		self.crawl_frequency = None
+		self.process_assigned_on = None
+		self.last_crawled = None
 		self.last_active = None
 		self.inserted_on = None
 		self.updated_on = None
+
+		# Populate from the DB row
+		if db_row:
+			self.populate_from_db_row(db_row)
 
 		# Delete rows from the file/directory table if not found in the staging table during processing
 		self.delete_missing = True
 
 		# Data for the scraping queue
 		self.crawled_on = None
-		self.assigned_process_id = assigned_process_id
 
 		# Vars to hold scraping content
 		self.subdir_names = []  # Name only
 		self.file_names = []  # Name only
 		self.files = {}  # Full File() instance
 		self.subdirs = {}  # Full Directory instance
+
+	def populate_from_db_row(self, db_row: dict) -> bool:
+		self.id = db_row['id'] if 'id' in db_row else None
+		self.dir_id = db_row['dir_id'] if 'dir_id' in db_row else None
+		self.dir_path = db_row['dir_path'] if 'dir_path' in db_row else None
+		self.file_count = db_row['file_count'] if 'file_count' in db_row else None
+		self.subdir_count = db_row['subdir_count'] if 'subdir_count' in db_row else None
+		self.next_crawl = db_row['next_crawl'] if 'next_crawl' in db_row else None
+		self.crawl_frequency = db_row['crawl_frequency'] if 'crawl_frequency' in db_row else None
+		self.process_assigned_on = db_row['process_assigned_on'] if 'process_assigned_on' in db_row else None
+		self.last_crawled = db_row['last_crawled'] if 'last_crawled' in db_row else None
+		self.last_active = db_row['last_active'] if 'last_active' in db_row else None
+		self.inserted_on = db_row['inserted_on'] if 'inserted_on' in db_row else None
+		self.updated_on = db_row['updated_on'] if 'updated_on' in db_row else None
+
 
 	def scrape_dir_contents(self, build_objects=False):
 		try:
@@ -411,7 +428,7 @@ class DirectoryCrawl:
 			)
 			# Populate the dirs list with the paths:
 			for row in cur:
-				d = DirectoryCrawl(dir_path=row['drive'])
+				d = DirectoryCrawl(db_row=row)
 				dirs.append(d)
 
 		# Return the list of paths
@@ -431,12 +448,7 @@ class DirectoryCrawl:
 					# Build the Directory object
 
 					# Build the new directory object
-					d = DirectoryCrawl(
-						dir_path=row['dir_path'],
-						dir_id=row['dir_id'],
-						last_crawled=row['last_crawled'],
-						assigned_process_id=process_id
-					)
+					d = DirectoryCrawl(db_row=row)
 
 					# Add to the directories to be returned
 					crawl_dir_queue.put(d)
