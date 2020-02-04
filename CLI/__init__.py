@@ -91,8 +91,7 @@ class UserInterface(Cmd):
 		Schedule.reschedule_dir(self.pg, path, frequency)
 
 	# Perform on-demand rescheduling
-	# def do_view_scrape_schedule(self, args: str) -> None:
-	def do_v(self, args: str) -> None:
+	def do_view_scrape_schedule(self, args: str) -> None:
 		try:
 			# TODO: Parse this properly
 			path, recursive = args.split(' ', 1)
@@ -111,6 +110,9 @@ class UserInterface(Cmd):
 				+ " | " + str(directory_control.dir_path)
 			)
 
+	def do_set_context(self, ):
+		"""cd C:"""
+		"""All search results are performed only within this location"""
 
 
 """
