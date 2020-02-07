@@ -5,8 +5,11 @@ from Interface.Schedule import Schedule
 from Interface.Scrape import Scrape
 from Interface.Search import Search
 
-from prompt_toolkit import prompt, HTML
+import re
+
+from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit import print_formatted_text as print  # Replace the print() function!
+from prompt_toolkit.completion import NestedCompleter
 
 
 # https://python-prompt-toolkit.readthedocs.io
@@ -18,35 +21,97 @@ class UserInterface():
 		self.pg = pg
 
 		# Config the UI
+		ps = PromptSession()  # Start a session for input history
 		line_prompt = "file_db> "
 
+		# Get the list of available commands
+		self.commands = self.available_commands(['do'])
+
+		# Setup the auto completion
+		completion_dict = {cmd: None for cmd in self.commands}  # Get the functions
+		# Add the nesting for the completion
+		completion_dict['search'] = {  # Search command
+			'name': None,
+			'name_file': None,
+			'name_dir': None,
+			'hash': None,
+			'duplicate_file': None,
+			'duplicate_dir': None,
+			'file_size': None,
+			'date': None,
+			'timestamp': None,
+			'timestamp_range': None,
+		}
+		completer = NestedCompleter.from_nested_dict(completion_dict)
+
 		# Perform the main input loop
-		kill_process = False
+		continue_running = True
 		print('Type ? to list commands')
-		while not kill_process:
-			cmd = prompt(line_prompt)
-			print(HTML(f'<span fg="white" bg="darkred">{cmd}</span>'))
+		while continue_running:
+			# Accept the commands
+			inp = ps.prompt(line_prompt, completer=completer)
+			# Execute the command (functions returning Truthy will exit the loop)
+			continue_running = self.execute_input(inp)
 
+	# Return the list of available commands in this class
+	def available_commands(self, prefixes: list) -> list:
+		functions = []
+		# Loop through the list of functions in this class
+		for fname in dir(self):
+			# Split the function name into [prefix]_[command]
+			try:
+				prefix, cmd = fname.split("_", 1)
+			except ValueError:  # If the function name cannot be parsed this way (no underscores)
+				continue  # If there is no prefix, then don't bother evaluating it
 
+			# Add this command to the list of available commands, if appropriate
+			if prefix in prefixes:
+				functions.append(cmd)
+		return functions
+
+	def execute_input(self, inp) -> bool:
+		# Santize the input
+		inp = inp.strip()
+		inp = re.sub('\s+', ' ', inp)  # Remove duplicate spaces
+
+		# Determine the command name, and its arguments
+		try:
+			cmd, args = inp.split(" ", 1)  # Split the arguments from the command
+		except ValueError:  # If there are no spaces to split by
+			cmd = inp
+			args = ''
+		cmd = cmd.lower()
+
+		# Execute the command, if it is valid
+		# TODO: Dynamically execute cmds https://stackoverflow.com/a/42227682/4458445
+		if cmd == "search":
+			self.do_search(args)
+		elif cmd == "view_scrape_schedule":
+			self.do_view_scrape_schedule(args)
+		elif cmd == "exit":
+			return False
+
+		# Continue running the program?
+		return True
 
 
 	# Default action if the input is not known
 	def default(self, args: str) -> None:
 		print(f"Command not recognized: {args}")
 
-	# Exit the UI
-	def help_exit(self) -> None:
-		print("Exit this UI application. (Ctrl+D)")
+	def do_help(self, args: str) -> None:
+		pass
 
 	def do_exit(self) -> bool:
 		return True
 
-	# Handle ctrl+D close
-	do_EOF = do_exit
-	helP_EOF = help_exit
+	# Exit the UI
+	def help_exit(self) -> None:
+		print("Exit this UI application. (Ctrl+D)")
 
 	# Perform searches
 	def do_search(self, args: str) -> None:
+		print(f"Searching! {args}")
 		try:
 			criteria, path = Util.parse_args(args)
 		except ValueError:
