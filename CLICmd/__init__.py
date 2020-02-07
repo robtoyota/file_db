@@ -1,3 +1,8 @@
+##################################
+# This is a back-burner skeleton that needs to be fleshed out for Cmd support as
+# a backup on systems that do not support the more robust UIs
+##################################
+from cmd import Cmd
 from Util.Config import Config
 from Interface.Util import Util
 from Interface.Hash import Hash
@@ -5,30 +10,20 @@ from Interface.Schedule import Schedule
 from Interface.Scrape import Scrape
 from Interface.Search import Search
 
-from prompt_toolkit import prompt, HTML
-from prompt_toolkit import print_formatted_text as print  # Replace the print() function!
 
+class UserInterface(Cmd):
+	# https://code-maven.com/interactive-shell-with-cmd-in-python
 
-# https://python-prompt-toolkit.readthedocs.io
-class UserInterface():
+	# Set the "UI" elements
+	prompt = "file_db> "
+	intro = "Type ? to list commands"
+
 	def __init__(self, pg, config_file: str) -> None:
+		super().__init__()
 		# Load the config
 		self.config = Config.load_config(config_file)
 		# Accept the database connection object
 		self.pg = pg
-
-		# Config the UI
-		line_prompt = "file_db> "
-
-		# Perform the main input loop
-		kill_process = False
-		print('Type ? to list commands')
-		while not kill_process:
-			cmd = prompt(line_prompt)
-			print(HTML(f'<span fg="white" bg="darkred">{cmd}</span>'))
-
-
-
 
 	# Default action if the input is not known
 	def default(self, args: str) -> None:

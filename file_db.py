@@ -2,6 +2,7 @@ from FileDbDAL import Pg
 from Util.Config import Config
 from Process import Process
 import sys
+import CLICmd
 from CLI import UserInterface
 
 
@@ -25,7 +26,8 @@ def ui(config_file):
 	# Connect to the DB
 	with Pg(config) as pg:
 		# Start the UI
-		UserInterface(pg=pg, config_file=config_file).cmdloop()
+		# CLICmd.UserInterface(pg=pg, config_file=config_file).cmdloop()  # No longer using Cmd
+		UserInterface(pg=pg, config_file=config_file)
 
 
 if __name__ == '__main__':
