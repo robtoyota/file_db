@@ -292,7 +292,6 @@ class Process:
 					traceback.print_exc(file=sys.stdout)
 					print("-" * 60)
 
-
 	def finalize_dir_contents(self, db_dump_interval: float) -> None:
 		# Start the timer
 		last_flush = time.time()
@@ -303,16 +302,19 @@ class Process:
 
 				try:
 					if time.time() - last_flush < db_dump_interval:  # Has enough time passed?
-						# Reset the timer
-						last_flush = time.time()
-						# Process the dir's contents that were staged
-						FileDbDAL.DirectoryCrawl.process_staged_dir_contents(pg)
-				except:  # Ugh
+						continue
+
+					# Reset the timer
+					last_flush = time.time()
+					# Process the dir's contents that were staged
+					FileDbDAL.DirectoryCrawl.process_staged_dir_contents(pg)
+				except Exception:  # Ugh
 					print("-" * 60)
 					print("Exception occurred in finalize_dir_contents")
 					print(str(sys.exc_info()))
 					traceback.print_exc(file=sys.stdout)
 					print("-" * 60)
+					raise
 
 	# Manage the file hashing queue
 	def manage_hash_queue(self, queue_maximums, hash_files_queue, empty_queue_sleep):

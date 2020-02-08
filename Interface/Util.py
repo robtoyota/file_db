@@ -29,8 +29,10 @@ class Util:
 
 	# Replace "*" wildcards in a user-supplied file/dir path, to the SQL wildcard "%"
 	@staticmethod
-	def path_parse_wildcards(path: str) -> str:
-		# First, escape the "%" wildcard, because it is a valid character in file/dir names
+	def path_parse_wildcard_search(path: str) -> str:
+		# Escape back slashes
+		path = path.replace("\\", "\\\\")
+		# Escape the "%" wildcard, because it is a valid character in file/dir names
 		path = path.replace("%", "\\%")
 		# Convert system wildcards ("*") with the SQL wildcard
 		path = path.replace("*", "%")
