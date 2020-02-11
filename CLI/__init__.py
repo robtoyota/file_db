@@ -6,7 +6,9 @@ from Interface.Scrape import Scrape
 from Interface.Search import Search
 
 import re
+import csv
 
+from prompt_toolkit import Application
 from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit import print_formatted_text as print  # Replace the print() function!
 from prompt_toolkit.completion import NestedCompleter
@@ -81,23 +83,40 @@ class UserInterface():
 			cmd = inp
 			args = ''
 		cmd = cmd.lower()
+		args = self.parse_args(args)
 
 		# Execute the command, if it is valid
 		# TODO: Dynamically execute cmds https://stackoverflow.com/a/42227682/4458445
 		if cmd == "search":
 			self.do_search(args)
+		elif cmd == "scrape_dir":
+			self.do_scrape_dir(args)
 		elif cmd == "view_scrape_schedule":
 			self.do_view_scrape_schedule(args)
 		elif cmd == "exit":
 			return False
+		else:
+			self.default(cmd, args)
 
 		# Continue running the program?
 		return True
 
+	def parse_args(self, arg_string: str) -> list:
+		# TODO: Properly parse these arguments
+		args = csv.reader([arg_string], delimiter=' ', quotechar='"')
+		return next(args)
+
+	def parse_path(self, path: str) -> str:
+		path = path.strip()
+		if path[-1:] in ["/", "\\"]:  # Remove any trailing path separators
+			path = path[:-1]
+		return path
 
 	# Default action if the input is not known
-	def default(self, args: str) -> None:
-		print(f"Command not recognized: {args}")
+	def default(self, cmd: str, args: str) -> None:
+		print(f"Command not recognized: {cmd}")
+		if args:
+			print(f"Arguments: {' '.join(args)}")
 
 	def do_help(self, args: str) -> None:
 		pass
@@ -110,13 +129,10 @@ class UserInterface():
 		print("Exit this UI application. (Ctrl+D)")
 
 	# Perform searches
-	def do_search(self, args: str) -> None:
+	def do_search(self, args: list) -> None:
+		criteria = args[0]
+		path = args[1]
 		print(f"Searching! {args}")
-		try:
-			criteria, path = Util.parse_args(args)
-		except ValueError:
-			print('***Error, missing arguments')
-			return
 
 		if criteria == "name":
 			Search.search_name(self.pg, path)
@@ -147,32 +163,25 @@ class UserInterface():
 		Hash.hash_dir(self.pg, path)
 
 	# Perform on-demand scraping
-	def do_scrape_dir(self, path: str) -> None:
+	def do_scrape_dir(self, args: list) -> None:
+		path = self.parse_path(args[0])
 		Scrape.scrape_dir(self.pg, path)
 
 	def do_scrape_file(self, path: str) -> None:
 		Scrape.scrape_file(self.pg, path)
 
 	# Perform on-demand rescheduling
-	def do_reschedule_dir(self, args: str) -> None:
-		try:
-			path, frequency = Util.parse_args(args)
-		except ValueError:
-			print('***Error, missing arguments')
-			return
+	def do_reschedule_dir(self, args: list) -> None:
+		path = self.parse_path(args[0])
+		frequency = args[0]
 
 		Schedule.reschedule_dir(self.pg, path, frequency)
 
 	# Perform on-demand rescheduling
-	def do_view_scrape_schedule(self, args: str) -> None:
-		try:
-			# TODO: Parse this properly
-			path, recursive = args.split(' ', 1)
-		except ValueError:
-			print('***Error, missing arguments')
-			return
+	def do_view_scrape_schedule(self, args: list) -> None:
+		path = self.parse_path(args[0])
+		recursive = Util.input_parse_bool(args[1]) if len(args) > 1 else False
 
-		recursive = Util.input_parse_bool(recursive)  # Parse the user-supplied string to bool
 		rows = Schedule.view_scrape_schedule(self.pg, path, recursive)
 
 		# TODO: Make this output a table

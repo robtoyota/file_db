@@ -586,432 +586,431 @@ class DirectoryCrawl:
 
 	@staticmethod
 	def install_pg_functions(pg):
-		cur = pg.cursor()
-
-		# get_dirs_to_crawl
-		cur.execute(""" 
-			create or replace function get_dirs_to_crawl
-			(
-				_process_id int,
-				_row_limit int
-			) 
-			returns table 
-			(
-				dir_path text, 
-				dir_id int, 
-				last_crawled timestamp
-			)
-			as $$
-			begin
-				return query
-				with dir_list as (  -- Identify the directories to crawl
-					select d.dir_id
-					from directory_control d
-					where
-						d.next_crawl < now()
-						and d.process_assigned_on is null
+		with pg.cursor() as cur:
+			# get_dirs_to_crawl
+			cur.execute(""" 
+				create or replace function get_dirs_to_crawl
+				(
+					_process_id int,
+					_row_limit int
+				) 
+				returns table 
+				(
+					dir_path text, 
+					dir_id int, 
+					last_crawled timestamp
+				)
+				as $$
+				begin
+					return query
+					with dir_list as (  -- Identify the directories to crawl
+						select d.dir_id
+						from directory_control d
+						where
+							d.next_crawl < now()
+							and d.process_assigned_on is null
+						order by
+							(
+								extract(epoch from now() - d.next_crawl)/(60*60) -- Number of hours since it was due to crawl
+								+ round(d.file_count/100)
+								+ round(d.subdir_count/100)
+							)
+						limit _row_limit
+					),
+					dc_upd as (  -- Claim the directories for crawling
+						update directory_control dc
+						set
+							process_assigned_on = now()
+						from dir_list dl
+						where dc.dir_id=dl.dir_id
+						returning
+							dc.dir_path, dc.dir_id, dc.last_crawled, dc.next_crawl
+					)
+					-- Return the list of directories to crawl
+					select 
+						dc.dir_path, dc.dir_id, dc.last_crawled
+					from dc_upd dc
 					order by
-						(
-							extract(epoch from now() - d.next_crawl)/(60*60) -- Number of hours since it was due to crawl
-							+ round(d.file_count/100)
-							+ round(d.subdir_count/100)
+						dc.next_crawl asc;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# get_files_to_hash
+			cur.execute("""
+				create or replace function get_files_to_hash
+				(
+					_process_id int,
+					_row_limit int
+				) 
+				returns table 
+				(
+					file_path text, 
+					file_id int,
+					mtime timestamp
+				)
+				as $$
+				begin
+					return query
+					with file_list as (  -- Get the list of files to hash
+						select
+							f.file_id
+						from
+							hash_control f
+						where
+							f.process_assigned_on is null
+							-- and f.file_size > 0
+							-- and f.file_size between 0.5 and 2500
+						order by
+							f.file_size asc  -- Get the "fastest to hash" (smallest) files
+							-- f.file_size desc  -- Get the "slowest to hash" (largest) files
+							-- ,f.mtime asc  -- Get the "most stable" (last changed longest ago) files
+						limit _row_limit
+					),
+					upd as (  -- Claim the files to hash
+						update
+							hash_control hc
+						set
+							process_assigned_on = now()
+						from
+							file_list fl
+						where
+							hc.file_id = fl.file_id
+						returning
+							hc.file_id, hc.mtime
+					)
+					-- Return the list of directories to crawl
+					select 
+						f.full_path, upd.file_id, upd.mtime
+					from
+						upd 
+						join vw_f f  -- The list of files
+							on (upd.file_id=f.id);
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# stage_hashes
+			# cur.execute("""
+			# 	create or replace function stage_hashes
+			# 	(
+			# 		_file_id int,
+			# 		_md5_hash text,
+			# 		_md5_hash_time timestamp,
+			# 		_sha1_hash text,
+			# 		_sha1_hash_time timestamp
+			# 	)
+			# 	returns boolean
+			# 	as $$
+			# 	begin
+			# 		with del as (
+			# 			delete from hash_control
+			# 			where file_id=_file_id
+			# 		)
+			# 		insert into hash
+			# 		(file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time)
+			# 		values
+			# 		(_file_id, _md5_hash, _md5_hash_time, _sha1_hash, _sha1_hash_time)
+			# 		on conflict on constraint hash_file_id_key do nothing;
+			#
+			# 		return true;
+			# 	end;
+			# 	$$ LANGUAGE plpgsql;
+			# """)
+
+			# process_staged_hashes
+			cur.execute("""
+				create or replace function process_staged_hashes()
+				returns boolean
+				as $$
+				begin
+					with stage as (
+						delete from hash_stage
+						returning file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time
+					),
+					del as (
+						delete from hash_control hc
+						using stage s
+						where hc.file_id=s.file_id
+					)
+					insert into hash
+					(file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time)
+					select file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time
+					from stage
+					on conflict on constraint hash_file_id_key do nothing;
+	
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# process_staged_files
+			cur.execute("""
+				create or replace function process_staged_files()
+				returns boolean
+				as $$
+				begin
+					-- Move (delete) files from staging and upsert into the file table
+					-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
+					with stg_process as (  -- Work with the rows in the staging process table
+						delete from file_stage_process
+						returning dir_id, delete_missing
+					),
+					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
+						delete from file f
+						using stg_process s
+						where 
+							f.dir_id = s.dir_id
+							and s.delete_missing is true  -- Only delete missing files if required
+							and not exists (
+								select from file_stage fs 
+								where 
+									f.dir_id=fs.dir_id 
+									and f.name=fs.name
+							)
+						returning
+							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on
+					),
+					fd_ins as (  -- Backup the deleted files 
+						insert into file_delete as t
+							(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
+						select
+							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on, null, now()
+						from
+							del f
+					),
+					stg as (  -- Move rows out of the staging table
+						delete from file_stage fs
+						using stg_process s
+						where fs.dir_id = s.dir_id
+						returning
+							fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
+					),
+					file_ins as (  -- Insert the rows into main table
+						insert into file as f
+							(name, dir_id, size, ctime, mtime, atime)
+						select
+							s.name, s.dir_id, s.size, s.ctime, s.mtime, s.atime
+						from
+							stg s
+						on conflict on constraint file_pkey do
+							update set 
+								updated_on = now(),
+								size = excluded.size,
+								ctime = excluded.ctime,
+								mtime = excluded.mtime,
+								atime = excluded.atime
+							where  -- Don't do empty updates
+								f.size <> excluded.size
+								or f.ctime <> excluded.ctime
+								or f.mtime <> excluded.mtime
+								or f.atime <> excluded.atime
+						returning
+							f.id, f.mtime, f.size
+					)
+					-- Schedule the new file for hashing (same as schedule_files_in_hash_control())
+					insert into hash_control as t
+						(file_id, mtime, file_size)
+					select
+						fi.id, fi.mtime, fi.size
+					from
+						file_ins fi
+					where
+						not exists (
+							select from hash h
+							where
+								h.file_id=fi.id
 						)
-					limit _row_limit
-				),
-				dc_upd as (  -- Claim the directories for crawling
+					on conflict on constraint hash_control_pkey do 
+						update set
+							mtime = excluded.mtime
+						where
+							t.mtime <> excluded.mtime;
+	
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# process_staged_subdirs
+			cur.execute("""
+				create or replace function process_staged_dirs()
+				returns boolean
+				as $$
+				begin
+					-- TODO: Delete these dirs recursively (delete their subdirs/files)
+					-- Delete dirs that are not in the subdir staging table, meaning they were not found during the scrape.
+					-- TODO: Immitate how proces_staged_files works
+					/*
+					* Commenting this out until drives are stable
+					with del as ( 
+						delete from directory d
+						where
+							basepath(d.dir_path) = _parent_dir_path  -- Only delete subdirs within the parent
+							and not exists (
+								select from directory_stage ds
+								where d.dir_path=ds.dir_path
+							)
+						returning
+							id, dir_path, ctime, mtime, inserted_on, updated_on
+					)
+					insert into directory_delete as t
+						(id, dir_path, ctime, mtime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
+					select
+						(id, dir_path, ctime, mtime, inserted_on, updated_on, null, now())
+					from
+						del;
+					*/
+					
+					-- Move (delete) subdirs from staging and upsert into the directory table
+					-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
+					with stg_process as (  -- Work with the rows in the staging process table
+						delete from directory_stage_process
+						returning parent_dir_path, delete_missing
+					),
+					stg as (  -- Move rows out of the staging table
+						delete from directory_stage ds
+						using stg_process s
+						where basepath(ds.dir_path) = s.parent_dir_path
+						returning
+							dir_path, ctime, mtime
+					),
+					dir_ins as (  -- Insert the rows into main table
+						insert into directory as t 
+							(dir_path, ctime, mtime)
+						select dir_path, ctime, mtime
+						from stg
+						on conflict on constraint directory_dir_path_key do
+							update set 
+								updated_on = now(),
+								ctime = excluded.ctime,
+								mtime = excluded.mtime
+							where  -- Don't do empty updates 
+								t.ctime <> excluded.ctime
+								or t.mtime <> excluded.mtime
+						returning
+							id, dir_path
+					)
+					-- Schedule the new directory for crawling (same as schedule_subdirs_in_directory_control())
+					insert into directory_control as t
+						(dir_id, dir_path)
+					select dir_ins.id, dir_ins.dir_path
+					from dir_ins 
+					on conflict on constraint directory_control_pkey do 
+						update set
+							dir_id = excluded.dir_id  -- In case the dir_id has changed for the dir_path
+							-- Don't update/reschedule any existing directories.
+						where  -- Don't do empty updates
+							t.dir_id <> excluded.dir_id;
+					
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# mark_dirs_crawled
+			cur.execute("""
+				create or replace function mark_dirs_crawled()
+				returns boolean
+				as $$
+				begin
+					with stg as (
+						delete from directory_control_stage dcs
+						where
+							-- Make sure there are no outstanding files staged
+							not exists (
+								select from file_stage fs
+								where dcs.dir_id=fs.dir_id
+							)
+							-- Make sure there are no outstanding subdirs staged
+							and not exists (
+								select from directory_stage ds
+								where dcs.dir_path=basepath(ds.dir_path)
+							)
+						returning
+							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count
+					)
 					update directory_control dc
 					set
-						process_assigned_on = now()
-					from dir_list dl
-					where dc.dir_id=dl.dir_id
-					returning
-						dc.dir_path, dc.dir_id, dc.last_crawled, dc.next_crawl
-				)
-				-- Return the list of directories to crawl
-				select 
-					dc.dir_path, dc.dir_id, dc.last_crawled
-				from dc_upd dc
-				order by
-					dc.next_crawl asc;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# get_files_to_hash
-		cur.execute("""
-			create or replace function get_files_to_hash
-			(
-				_process_id int,
-				_row_limit int
-			) 
-			returns table 
-			(
-				file_path text, 
-				file_id int,
-				mtime timestamp
-			)
-			as $$
-			begin
-				return query
-				with file_list as (  -- Get the list of files to hash
-					select
-						f.file_id
-					from
-						hash_control f
-					where
-						f.process_assigned_on is null
-						-- and f.file_size > 0
-						-- and f.file_size between 0.5 and 2500
-					order by
-						f.file_size asc  -- Get the "fastest to hash" (smallest) files
-						-- f.file_size desc  -- Get the "slowest to hash" (largest) files
-						-- ,f.mtime asc  -- Get the "most stable" (last changed longest ago) files
-					limit _row_limit
-				),
-				upd as (  -- Claim the files to hash
-					update
-						hash_control hc
-					set
-						process_assigned_on = now()
-					from
-						file_list fl
-					where
-						hc.file_id = fl.file_id
-					returning
-						hc.file_id, hc.mtime
-				)
-				-- Return the list of directories to crawl
-				select 
-					f.full_path, upd.file_id, upd.mtime
-				from
-					upd 
-					join vw_f f  -- The list of files
-						on (upd.file_id=f.id);
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# stage_hashes
-		# cur.execute("""
-		# 	create or replace function stage_hashes
-		# 	(
-		# 		_file_id int,
-		# 		_md5_hash text,
-		# 		_md5_hash_time timestamp,
-		# 		_sha1_hash text,
-		# 		_sha1_hash_time timestamp
-		# 	)
-		# 	returns boolean
-		# 	as $$
-		# 	begin
-		# 		with del as (
-		# 			delete from hash_control
-		# 			where file_id=_file_id
-		# 		)
-		# 		insert into hash
-		# 		(file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time)
-		# 		values
-		# 		(_file_id, _md5_hash, _md5_hash_time, _sha1_hash, _sha1_hash_time)
-		# 		on conflict on constraint hash_file_id_key do nothing;
-		#
-		# 		return true;
-		# 	end;
-		# 	$$ LANGUAGE plpgsql;
-		# """)
-
-		# process_staged_hashes
-		cur.execute("""
-			create or replace function process_staged_hashes()
-			returns boolean
-			as $$
-			begin
-				with stage as (
-					delete from hash_stage
-					returning file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time
-				),
-				del as (
-					delete from hash_control hc
-					using stage s
-					where hc.file_id=s.file_id
-				)
-				insert into hash
-				(file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time)
-				select file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time
-				from stage
-				on conflict on constraint hash_file_id_key do nothing;
-
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# process_staged_files
-		cur.execute("""
-			create or replace function process_staged_files()
-			returns boolean
-			as $$
-			begin
-				-- Move (delete) files from staging and upsert into the file table
-				-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
-				with stg_process as (  -- Work with the rows in the staging process table
-					delete from file_stage_process
-					returning dir_id, delete_missing
-				),
-				del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
-					delete from file f
-					using stg_process s
-					where 
-						f.dir_id = s.dir_id
-						and s.delete_missing is true  -- Only delete missing files if required
-						and not exists (
-							select from file_stage fs 
-							where 
-								f.dir_id=fs.dir_id 
-								and f.name=fs.name
-						)
-					returning
-						f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on
-				),
-				fd_ins as (  -- Backup the deleted files 
-					insert into file_delete as t
-						(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-					select
-						f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on, null, now()
-					from
-						del f
-				),
-				stg as (  -- Move rows out of the staging table
-					delete from file_stage fs
-					using stg_process s
-					where fs.dir_id = s.dir_id
-					returning
-						fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
-				),
-				file_ins as (  -- Insert the rows into main table
-					insert into file as f
-						(name, dir_id, size, ctime, mtime, atime)
-					select
-						s.name, s.dir_id, s.size, s.ctime, s.mtime, s.atime
-					from
-						stg s
-					on conflict on constraint file_pkey do
-						update set 
-							updated_on = now(),
-							size = excluded.size,
-							ctime = excluded.ctime,
-							mtime = excluded.mtime,
-							atime = excluded.atime
-						where  -- Don't do empty updates
-							f.size <> excluded.size
-							or f.ctime <> excluded.ctime
-							or f.mtime <> excluded.mtime
-							or f.atime <> excluded.atime
-					returning
-						f.id, f.mtime, f.size
-				)
-				-- Schedule the new file for hashing (same as schedule_files_in_hash_control())
-				insert into hash_control as t
-					(file_id, mtime, file_size)
-				select
-					fi.id, fi.mtime, fi.size
-				from
-					file_ins fi
-				where
-					not exists (
-						select from hash h
-						where
-							h.file_id=fi.id
-					)
-				on conflict on constraint hash_control_pkey do 
-					update set
-						mtime = excluded.mtime
-					where
-						t.mtime <> excluded.mtime;
-
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# process_staged_subdirs
-		cur.execute("""
-			create or replace function process_staged_dirs()
-			returns boolean
-			as $$
-			begin
-				-- TODO: Delete these dirs recursively (delete their subdirs/files)
-				-- Delete dirs that are not in the subdir staging table, meaning they were not found during the scrape.
-				-- TODO: Immitate how proces_staged_files works
-				/*
-				* Commenting this out until drives are stable
-				with del as ( 
-					delete from directory d
-					where
-						basepath(d.dir_path) = _parent_dir_path  -- Only delete subdirs within the parent
-						and not exists (
-							select from directory_stage ds
-							where d.dir_path=ds.dir_path
-						)
-					returning
-						id, dir_path, ctime, mtime, inserted_on, updated_on
-				)
-				insert into directory_delete as t
-					(id, dir_path, ctime, mtime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-				select
-					(id, dir_path, ctime, mtime, inserted_on, updated_on, null, now())
-				from
-					del;
-				*/
-				
-				-- Move (delete) subdirs from staging and upsert into the directory table
-				-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
-				with stg_process as (  -- Work with the rows in the staging process table
-					delete from directory_stage_process
-					returning parent_dir_path, delete_missing
-				),
-				stg as (  -- Move rows out of the staging table
-					delete from directory_stage ds
-					using stg_process s
-					where basepath(ds.dir_path) = s.parent_dir_path
-					returning
-						dir_path, ctime, mtime
-				),
-				dir_ins as (  -- Insert the rows into main table
-					insert into directory as t 
-						(dir_path, ctime, mtime)
-					select dir_path, ctime, mtime
+						last_crawled = stg.crawled_on,
+						next_crawl = stg.crawled_on + (crawl_frequency || ' seconds')::interval,
+						file_count = stg.file_count,
+						subdir_count = stg.subdir_count,
+						process_assigned_on	= null
 					from stg
-					on conflict on constraint directory_dir_path_key do
-						update set 
-							updated_on = now(),
-							ctime = excluded.ctime,
-							mtime = excluded.mtime
-						where  -- Don't do empty updates 
-							t.ctime <> excluded.ctime
-							or t.mtime <> excluded.mtime
-					returning
-						id, dir_path
-				)
-				-- Schedule the new directory for crawling (same as schedule_subdirs_in_directory_control())
-				insert into directory_control as t
-					(dir_id, dir_path)
-				select dir_ins.id, dir_ins.dir_path
-				from dir_ins 
-				on conflict on constraint directory_control_pkey do 
-					update set
-						dir_id = excluded.dir_id  -- In case the dir_id has changed for the dir_path
-						-- Don't update/reschedule any existing directories.
-					where  -- Don't do empty updates
-						t.dir_id <> excluded.dir_id;
-				
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# mark_dirs_crawled
-		cur.execute("""
-			create or replace function mark_dirs_crawled()
-			returns boolean
-			as $$
-			begin
-				with stg as (
-					delete from directory_control_stage dcs
 					where
-						-- Make sure there are no outstanding files staged
-						not exists (
-							select from file_stage fs
-							where dcs.dir_id=fs.dir_id
-						)
-						-- Make sure there are no outstanding subdirs staged
+						dc.dir_id=stg.dir_id;
+						
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# schedule_subdirs_in_directory_control
+			cur.execute("""
+				create or replace function schedule_subdirs_in_directory_control
+				(
+					_dir_path text,
+					_crawl_frequency int=60*60*24*14,
+					_next_crawl timestamp=now()
+				) 
+				returns boolean
+				as $$
+				begin
+					insert into directory_control as t
+						(dir_id, dir_path, crawl_frequency, next_crawl)
+					select
+						id, dir_path, _crawl_frequency, _next_crawl
+					from
+						directory
+					where
+						basepath(dir_path) = _dir_path  -- Only select directories whose PARENT is the _dir_path 
+					on conflict on constraint directory_control_pkey do 
+						update set
+							dir_id = excluded.dir_id  -- Incase the dir_id has changed for the dir_path
+							-- Don't update/reschedule any existing directories.
+						where  -- Don't do empty updates
+							t.dir_id <> excluded.dir_id;
+	
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# schedule_files_in_hash_control
+			cur.execute("""
+				create or replace function schedule_files_in_hash_control
+				(
+					_dir_id int
+				) 
+				returns boolean
+				as $$
+				begin
+					insert into hash_control as t
+						(file_id, mtime, file_size)
+					select
+						id, mtime, size
+					from
+						file
+					where
+						dir_id = _dir_id
 						and not exists (
-							select from directory_stage ds
-							where dcs.dir_path=basepath(ds.dir_path)
+							select from hash h
+							where h.file_id=vw_f.id
 						)
-					returning
-						dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count
-				)
-				update directory_control dc
-				set
-					last_crawled = stg.crawled_on,
-					next_crawl = stg.crawled_on + (crawl_frequency || ' seconds')::interval,
-					file_count = stg.file_count,
-					subdir_count = stg.subdir_count,
-					process_assigned_on	= null
-				from stg
-				where
-					dc.dir_id=stg.dir_id;
-					
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
+					on conflict on constraint hash_control_pkey do 
+						update set
+							mtime = excluded.mtime
+						where
+							t.mtime <> excluded.mtime;
+	
+					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
 
-		# schedule_subdirs_in_directory_control
-		cur.execute("""
-			create or replace function schedule_subdirs_in_directory_control
-			(
-				_dir_path text,
-				_crawl_frequency int=60*60*24*14,
-				_next_crawl timestamp=now()
-			) 
-			returns boolean
-			as $$
-			begin
-				insert into directory_control as t
-					(dir_id, dir_path, crawl_frequency, next_crawl)
-				select
-					id, dir_path, _crawl_frequency, _next_crawl
-				from
-					directory
-				where
-					basepath(dir_path) = _dir_path  -- Only select directories whose PARENT is the _dir_path 
-				on conflict on constraint directory_control_pkey do 
-					update set
-						dir_id = excluded.dir_id  -- Incase the dir_id has changed for the dir_path
-						-- Don't update/reschedule any existing directories.
-					where  -- Don't do empty updates
-						t.dir_id <> excluded.dir_id;
-
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		# schedule_files_in_hash_control
-		cur.execute("""
-			create or replace function schedule_files_in_hash_control
-			(
-				_dir_id int
-			) 
-			returns boolean
-			as $$
-			begin
-				insert into hash_control as t
-					(file_id, mtime, file_size)
-				select
-					id, mtime, size
-				from
-					file
-				where
-					dir_id = _dir_id
-					and not exists (
-						select from hash h
-						where h.file_id=vw_f.id
-					)
-				on conflict on constraint hash_control_pkey do 
-					update set
-						mtime = excluded.mtime
-					where
-						t.mtime <> excluded.mtime;
-
-				return true;
-			end;
-			$$ LANGUAGE plpgsql;
-		""")
-
-		pg.commit()
-		cur.close()
+			pg.commit()
+			cur.close()
 
 	@staticmethod
 	def install_foreign_keys(pg):
