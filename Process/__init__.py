@@ -52,6 +52,13 @@ class Process:
 			'load_hashes_timer': 15,
 		}
 
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		# TODO: Perform the cleanup
+		return
+
 	def start_crawling(self):
 		processes = []  # List of processes that will run the program
 		try:

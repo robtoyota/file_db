@@ -130,7 +130,7 @@ class SQLUtil:
 		cur.execute("""
 			create or replace view vw_directory_activity_last_ctime as
 			select dir_id, max(ctime) as last_ctime
-			from ll
+			from vw_ll
 			group by dir_id;
 		""")
 
@@ -138,7 +138,7 @@ class SQLUtil:
 		cur.execute("""
 			create or replace view vw_directory_activity_last_mtime as
 			select dir_id, max(mtime) as last_mtime
-			from ll
+			from vw_ll
 			group by dir_id;
 		""")
 		pg.commit()

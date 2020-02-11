@@ -8,11 +8,14 @@ class Config:
 
 	@staticmethod
 	def load_config(file_name: str = None) -> dict:
-		# Check if the specified file exists. If not, then revert to the default file
-		if file_name is None or not os.path.isfile(file_name):
-			file_name = 'config.json'  # Default file
+		file_name = Config.parse_config_path(file_name)
 		# Get the config
 		return Config.read_json(file_name)
+
+	@staticmethod
+	def write_config(config_vals: dict, file_name: str = None) -> None:
+		file_name = Config.parse_config_path(file_name)
+		Config.write_json(file_name, config_vals)
 
 	@staticmethod
 	def read_json(file_path: str, create_file: bool = False) -> dict:
@@ -31,10 +34,13 @@ class Config:
 		return data
 
 	@staticmethod
-	def write_json_file(json_file: str, dom_values: dict) -> None:
-		json_output = []
-		for data in dom_values.values():
-			json_output.append(data.__dict__)
+	def write_json(file_path: str, config_vals: dict) -> None:
+		with open(file_path, 'w') as f:
+			json.dump(config_vals, f, indent=4)
 
-		with open(json_file, 'w') as f:
-			json.dump(json_output, f)
+	@staticmethod
+	def parse_config_path(file_name: str = None) -> str:
+		# Check if the specified file exists. If not, then revert to the default file
+		if file_name is None or not os.path.isfile(file_name):
+			file_name = 'config.json'  # Default file
+		return file_name
