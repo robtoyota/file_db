@@ -74,29 +74,3 @@ class Install:
 		DirectoryCrawl.install_foreign_keys(pg)
 		Search.install_foreign_keys(pg)
 		FileHandler.install_foreign_keys(pg)
-
-		# Insert the paths to crawl
-		print("Inserting the paths to crawl...")
-		if drop_tables:  # Only repopulate the tables if the tables were dropped
-			with pg.cursor() as cur:
-				for dp in [
-					'C:\\',
-					'D:\\',
-					'E:\\',
-					'F:\\',
-					'G:\\',
-					'H:\\',
-					'I:\\',
-					'K:\\',
-					'M:\\',
-					'S:\\',
-					'T:\\',
-					'X:\\',
-				]:
-					# Load all of these base directories into the directory table
-					cur.execute("insert into directory (dir_path) values (%s)", (dp,))
-					# Now schedule the dirs for crawling.
-					cur.execute("select schedule_subdirs_in_directory_control(%s);", (dp,))
-
-
-

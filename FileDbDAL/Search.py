@@ -73,13 +73,13 @@ class Search:
 				(
 					_name text
 				)
-				returns setof f
+				returns setof vw_ll
 				as $$
 				begin
 					-- todo: If a matching directory is found, don't return all the files inside of it
 					return query
 					select *
-					from f
+					from vw_ll
 					where 
 						name like _name  -- Match the file name
 						or basename(dir_path) like _name;  -- Match the dir name
@@ -93,12 +93,12 @@ class Search:
 				(
 					_name text
 				)
-				returns setof f
+				returns setof vw_ll
 				as $$
 				begin
 					return query
 					select *
-					from f
+					from vw_ll
 					where name like _name;
 				end;
 				$$ language plpgsql;
@@ -128,14 +128,14 @@ class Search:
 					_hash text,
 					_hash_algorithm text default null
 				)
-				returns setof f
+				returns setof vw_ll
 				as $$
 				begin
 					_hash_algorithm = upper(_hash_algorithm);
 
 					return query
 					select *
-					from f
+					from vw_ll
 					where 
 						(  -- Check MD5 hash
 							(_hash_algorithm is null or _hash_algorithm = 'MD5')
@@ -160,17 +160,17 @@ class Search:
 					-- todo: subdir full of files to match
 					-- todo: limiting paths to search in
 				)
-				returns setof f
+				returns setof vw_ll
 				as $$
 				begin
 					return query
 					with needle as (
 						select *
-						from f
+						from vw_ll
 						where dir_path = basepath(_full_path) and name = basename(_full_path) -- Search by base path
 					)
 					select f.*
-					from f
+					from vw_ll f
 						join needle n
 							on (
 								f.id=n.id -- Make sure to at least return the file at the given path
@@ -210,17 +210,17 @@ class Search:
 					-- todo: list of dirs to match
 					-- todo: limiting paths to search in
 				)
-				returns setof f
+				returns setof vw_ll
 				as $$
 				begin
 					return query
 					with needle as (
 						select *
-						from f
+						from vw_ll
 						where dir_path = _dir_path
 					)
 					select f.*
-					from f
+					from vw_ll f
 						join needle n
 							on (
 								f.id=n.id -- Make sure to at least return the files at the given path

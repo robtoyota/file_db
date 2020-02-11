@@ -23,7 +23,6 @@ class UserInterface():
 		self.pg = pg
 
 		# Config the UI
-		ps = PromptSession()  # Start a session for input history
 		line_prompt = "file_db> "
 
 		# Get the list of available commands
@@ -46,14 +45,24 @@ class UserInterface():
 		}
 		completer = NestedCompleter.from_nested_dict(completion_dict)
 
+		# Define the prompt session
+		ps = PromptSession(line_prompt, completer=completer)  # Start a session for input history
+
 		# Perform the main input loop
 		continue_running = True
 		print('Type ? to list commands')
 		while continue_running:
 			# Accept the commands
-			inp = ps.prompt(line_prompt, completer=completer)
+			inp = ps.prompt()
 			# Execute the command (functions returning Truthy will exit the loop)
 			continue_running = self.execute_input(inp)
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		# TODO: Perform the cleanup
+		return
 
 	# Return the list of available commands in this class
 	def available_commands(self, prefixes: list) -> list:

@@ -1,23 +1,23 @@
-from FileDbDAL import Pg
-from Util.Config import Config
 from Process import Process
 import sys
-import CLICmd
+
+from FileDbDAL import Pg
 from CLI import UserInterface
+from Util.Config import Config
+from install import Install
 
 
 def server(config_file):
 	# Get the processes started
-	p = Process(config_file=config_file)
+	with Process(config_file=config_file) as p:
+		# Install the postgres tables, functions, etc
+		p.install_sql()
 
-	# Install the postgres tables, functions, etc
-	p.install_sql()
+		# Reset the crawling schedules in postgres
+		p.reset_schedules()
 
-	# Reset the crawling schedules in postgres
-	p.reset_schedules()
-
-	# Run the program
-	p.start_crawling()
+		# Run the program
+		p.start_crawling()
 
 
 def ui(config_file):
@@ -30,12 +30,16 @@ def ui(config_file):
 		UserInterface(pg=pg, config_file=config_file)
 
 
+def install(config_file):
+	Install(config_file)
+
+
 if __name__ == '__main__':
 	# https://codeburst.io/building-beautiful-command-line-interfaces-with-python-26c7e1bb54df
 
 	# Defaults
-	in_config_file = None
-	in_program_type = "ui"
+	in_config_file = ""
+	in_program_type = ""
 
 	# Use the user-supplied config file
 	if len(sys.argv) > 1:
@@ -50,8 +54,11 @@ if __name__ == '__main__':
 		server(in_config_file)
 	elif in_program_type.lower() == "ui":
 		ui(in_config_file)
+	elif in_program_type.lower() == "install":
+		install(in_config_file)
 	else:
-		ui(in_config_file)  # Default
+		# ui(in_config_file)  # Default
+		install(in_config_file)  # Default
 
 
 
