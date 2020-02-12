@@ -5,5 +5,8 @@
         "dbname": "files_db",
         "user": "",
         "password": ""
+    },
+    "CLI": {
+        "default_pwd": "C:\\"
     }
 }

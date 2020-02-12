@@ -47,9 +47,8 @@ class Util:
 
 	@staticmethod
 	def sql_path_parse_exact_search(path: str) -> str:
-		path = path.strip()
 		# Remove trailing slashes (/home/ -> /home). However, allow for drives (stored in the DB as C:\)
-		path = re.sub(r'[^:][\\|/]+$', r'\1', path)
+		path = Util.strip_trailing_slashes(path)
 		return path
 
 	# sanitize_order_by
@@ -142,7 +141,7 @@ class Util:
 
 	@staticmethod
 	# Join a path together, similar to os.path.join(*args)
-	def join_path(*path_slices: str) -> str:
+	def path_join(*path_slices: str) -> str:
 		# This is a custom function because os.path.join() uses the user's OS's directory delimiter ("\" for Windows while
 		# others user "/"), but the DB data might be from a different OS than the user's machine. So use the path slices
 		# that the user supplies to figure out whether to use "/" or "\" to join.
@@ -157,8 +156,17 @@ class Util:
 		separator = Util.path_separator("".join(path_slices))  # This might be an incomplete path, so check all slices
 		return separator.join(path_slices)
 
+	@staticmethod
+	def strip_trailing_slashes(path: str) -> str:
+		path = path.strip()
+		return re.sub(r'([^:])?[\\|/]+$', r'\1', path)
+
 
 	@staticmethod
 	def dir_in_db(pg, path: str) -> bool:
+		path = Util.sql_path_parse_exact_search(path)  # Bring the path in line with how the data is stored in the DB
+
 		with pg.cursor() as cur:
-			cur.execute("select 1 from directory where dir_path=%s")
+			cur.execute("select * from dir_path_exists(%s)", (path,))  # Query the DB
+			exists = cur.fetchone()[0]
+			return exists

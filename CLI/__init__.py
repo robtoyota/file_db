@@ -18,6 +18,7 @@ from prompt_toolkit.completion import NestedCompleter
 # https://python-prompt-toolkit.readthedocs.io
 class UserInterface():
 	pwd = ''
+	pwd_exists_on_disk = True
 
 	def __init__(self, pg, config_file: str) -> None:
 		# Load the config
@@ -26,6 +27,7 @@ class UserInterface():
 		self.pg = pg
 
 		# Config the UI
+		self.do_cd([self.config['CLI']['default_pwd']])
 		line_prompt = "file_db> "
 
 		# Get the list of available commands
@@ -84,7 +86,7 @@ class UserInterface():
 		return functions
 
 	def execute_input(self, inp) -> bool:
-		# Santize the input
+		# Sanitize the input
 		inp = inp.strip()
 		inp = re.sub(r'\s+', ' ', inp)  # Remove duplicate spaces
 
@@ -107,8 +109,12 @@ class UserInterface():
 			self.do_view_scrape_schedule(args)
 		elif cmd == "cd":
 			self.do_cd(args)
+		elif cmd == "pwd":
+			self.do_pwd(args)
+
+		# System functions
 		elif cmd == "exit":
-			return False
+			return self.do_exit()
 		else:
 			self.default(cmd, args)
 
@@ -121,9 +127,20 @@ class UserInterface():
 		return next(args)
 
 	def parse_path(self, path: str) -> str:
-		path = path.strip()
-		if path[-1:] in ["/", "\\"]:  # Remove any trailing path separators
-			path = path[:-1]
+		path = Util.strip_trailing_slashes(path)
+
+		# Is this a relative path?
+
+		# No leading slash for *nix (/home), and no drive letter for windows (C:)
+		# Or relative directory (leading ./)
+		if (path[0] != "/" and path[1] != ":") or path[:2] in ["./", ".\\"]:
+			Util.path_join(self.pwd, path)
+		# Handle ../
+		# TODO: Make this recursive
+		elif path[:3] in ["../", "..\\"]:
+			# TODO: Util.path_join(basepath(self.pwd), path)
+			pass
+
 		return path
 
 	# Default action if the input is not known
@@ -136,25 +153,40 @@ class UserInterface():
 		pass
 
 	def do_exit(self) -> bool:
-		return True
+		return False
 
 	# Exit the UI
 	def help_exit(self) -> None:
 		print("Exit this UI application. (Ctrl+D)")
 
 	def do_cd(self, args: list) -> None:
-		new_dir = args[0]
+		new_dir = self.parse_path(args[0])
 
-		# Is this a valid dir (existing in the file system, or existing in the database)?
-		if not os.path.isdir(new_dir):
-			pass
+		# Does this directory exist on the local disk?
+		if os.path.isdir(new_dir):
+			self.pwd_exists_on_disk = True
+		# If not, does it exist in the DB?
+		else:
+			if not Util.dir_in_db(self.pg, new_dir):
+				print("***Error: Not a valid directory")
+				return
+			else:  # Allow the cd to this directory if it exists in the DB
+				if self.pwd_exists_on_disk:  # If switching from disk to DB dirs, show a warning
+					print("Warning: This directory only exists in the DB, and does not exist locally")
+				self.pwd_exists_on_disk = False
 
-		self.pwd = ''
+		# Set the present working directory to the new dir
+		self.pwd = new_dir
+
+	def do_pwd(self, args: list) -> None:
+		pwd = "" if self.pwd_exists_on_disk else "*"  # Indicate (with a "*") if this dir only exists in the DB
+		pwd += self.pwd
+		print(pwd)
 
 	# Perform searches
 	def do_search(self, args: list) -> None:
 		criteria = args[0]
-		path = args[1]
+		path = self.parse_path(args[1])
 		print(f"Searching! {args}")
 
 		if criteria == "name":
@@ -218,6 +250,20 @@ class UserInterface():
 	def do_set_context(self, ):
 		"""cd C:"""
 		"""All search results are performed only within this location"""
+
+	def do_dir(self, args: list) -> None:
+		# Return the current directory contents on disk
+		pass
+
+	do_ls = do_dir
+	do_ll = do_dir
+
+	def do_qdir(self, args: list) -> None:
+		# Return the directory contents in the DB (the q prefix means query)
+		pass
+
+	do_qls = do_qdir
+	do_qll = do_qdir
 
 
 """
