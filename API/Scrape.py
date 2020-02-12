@@ -1,4 +1,6 @@
-from Interface.Util import Util
+from API.Util import Util
+
+
 class Scrape:
 	@staticmethod
 	def scrape_dir(pg, path: str) -> bool:
@@ -12,7 +14,7 @@ class Scrape:
 
 	@staticmethod
 	def schedule_scrape_dir(pg, path: str, next_crawl: str) -> bool:
-		path = Util.path_parse_wildcard_search(path)
+		path = Util.sql_path_parse_wildcard_search(path)
 		# Expects next_crawl to be a string in a datetime format (eg: 1900-01-01 00:00:00)
 		with pg.cursor() as cur:
 			cur.execute(

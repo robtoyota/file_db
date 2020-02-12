@@ -1,12 +1,13 @@
 from Util.Config import Config
-from Interface.Util import Util
-from Interface.Hash import Hash
-from Interface.Schedule import Schedule
-from Interface.Scrape import Scrape
-from Interface.Search import Search
+from API.Util import Util
+from API.Hash import Hash
+from API.Schedule import Schedule
+from API.Scrape import Scrape
+from API.Search import Search
 
 import re
 import csv
+import os
 
 from prompt_toolkit import Application
 from prompt_toolkit import PromptSession, HTML
@@ -16,6 +17,8 @@ from prompt_toolkit.completion import NestedCompleter
 
 # https://python-prompt-toolkit.readthedocs.io
 class UserInterface():
+	pwd = ''
+
 	def __init__(self, pg, config_file: str) -> None:
 		# Load the config
 		self.config = Config.load_config(config_file)
@@ -83,7 +86,7 @@ class UserInterface():
 	def execute_input(self, inp) -> bool:
 		# Santize the input
 		inp = inp.strip()
-		inp = re.sub('\s+', ' ', inp)  # Remove duplicate spaces
+		inp = re.sub(r'\s+', ' ', inp)  # Remove duplicate spaces
 
 		# Determine the command name, and its arguments
 		try:
@@ -102,6 +105,8 @@ class UserInterface():
 			self.do_scrape_dir(args)
 		elif cmd == "view_scrape_schedule":
 			self.do_view_scrape_schedule(args)
+		elif cmd == "cd":
+			self.do_cd(args)
 		elif cmd == "exit":
 			return False
 		else:
@@ -122,7 +127,7 @@ class UserInterface():
 		return path
 
 	# Default action if the input is not known
-	def default(self, cmd: str, args: str) -> None:
+	def default(self, cmd: str, args: list) -> None:
 		print(f"Command not recognized: {cmd}")
 		if args:
 			print(f"Arguments: {' '.join(args)}")
@@ -136,6 +141,15 @@ class UserInterface():
 	# Exit the UI
 	def help_exit(self) -> None:
 		print("Exit this UI application. (Ctrl+D)")
+
+	def do_cd(self, args: list) -> None:
+		new_dir = args[0]
+
+		# Is this a valid dir (existing in the file system, or existing in the database)?
+		if not os.path.isdir(new_dir):
+			pass
+
+		self.pwd = ''
 
 	# Perform searches
 	def do_search(self, args: list) -> None:

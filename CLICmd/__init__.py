@@ -4,11 +4,11 @@
 ##################################
 from cmd import Cmd
 from Util.Config import Config
-from Interface.Util import Util
-from Interface.Hash import Hash
-from Interface.Schedule import Schedule
-from Interface.Scrape import Scrape
-from Interface.Search import Search
+from API.Util import Util
+from API.Hash import Hash
+from API.Schedule import Schedule
+from API.Scrape import Scrape
+from API.Search import Search
 
 
 class UserInterface(Cmd):

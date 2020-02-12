@@ -57,8 +57,7 @@ if __name__ == '__main__':
 	elif in_program_type.lower() == "install":
 		install(in_config_file)
 	else:
-		# ui(in_config_file)  # Default
-		install(in_config_file)  # Default
+		ui(in_config_file)  # Default
 
 
 
