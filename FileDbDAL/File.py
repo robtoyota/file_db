@@ -200,8 +200,7 @@ class File:
 
 	@staticmethod
 	def install_pg_functions(pg):
-		pass
-		""" 
+		"""
 		/*
 			add_file
 				upsert
@@ -213,6 +212,20 @@ class File:
 				delete from file
 		*/
 		"""
+		with pg.cursor() as cur:
+			cur.execute("""
+				create or replace function file_path_exists (_path text) 
+				returns bool
+				as $$
+				begin
+					if exists (select 1 from vw_ll where dir_path=basepath(_path) and name=basename(_path)) then
+						return true;
+					else 
+						return false;
+					end if;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
 
 
 	@staticmethod

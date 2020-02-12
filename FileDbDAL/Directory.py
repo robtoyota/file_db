@@ -160,4 +160,17 @@ class Directory:
 
 	@staticmethod
 	def install_pg_functions(pg):
-		pass
+		with pg.cursor() as cur:
+			cur.execute("""
+				create or replace function dir_path_exists (_path text) 
+				returns bool
+				as $$
+				begin
+					if exists (select 1 from directory where dir_path=_path) then
+						return true;
+					else 
+						return false;
+					end if;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")

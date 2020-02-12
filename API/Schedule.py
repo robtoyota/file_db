@@ -1,4 +1,4 @@
-from Interface.Util import Util
+from API.Util import Util
 from FileDbDAL.DirectoryCrawl import DirectoryCrawl
 
 
@@ -11,7 +11,7 @@ class Schedule:
 	def view_scrape_schedule(pg, path: str, recursive: bool = False, order_by: str = '', row_limit: int = 100) -> list:
 		with pg.cursor() as cur:
 			# Make the input path searchable with wildcards
-			path = Util.path_parse_wildcard_search(path)
+			path = Util.sql_path_parse_wildcard_search(path)
 
 			# Add wildcard to directory path to make it recursive, unless user has already added it
 			if recursive and not path[-1:] == '%':
