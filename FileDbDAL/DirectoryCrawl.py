@@ -327,8 +327,6 @@ class DirectoryCrawl:
 	@staticmethod
 	def process_staged_dir_contents(pg):
 		with pg.cursor() as cur:
-			start_time = time.time()
-
 			try:
 				# Upsert into directory and schedule the crawling of the subdirs
 				cur.execute("select process_staged_dirs()")
@@ -929,6 +927,15 @@ class DirectoryCrawl:
 							)
 						returning
 							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count
+					),
+					schd as (  -- Get the new crawling frequency for the dirs 
+						select dir_id, new_frequency
+						from crawl_frequency_last_ctime_calculate(
+							30::float, -- _divide_seconds,
+							round(60*60*0.25)::int, -- _min_frequency,
+							round(60*60*24*7)::int, -- _max_frequency,
+							array[(select dir_id from stg)]::int[] -- _dir_id
+						)
 					)
 					update directory_control dc
 					set
@@ -946,9 +953,9 @@ class DirectoryCrawl:
 				$$ LANGUAGE plpgsql;
 			""")
 
-			# schedule_subdirs_in_directory_control
+			# schedule_subdirectories_to_scrape
 			cur.execute("""
-				create or replace function schedule_subdirs_in_directory_control
+				create or replace function schedule_subdirectories_to_scrape
 				(
 					_dir_path text,
 					_crawl_frequency int=60*60*24*14,
@@ -967,7 +974,7 @@ class DirectoryCrawl:
 						basepath(dir_path) = _dir_path  -- Only select directories whose PARENT is the _dir_path 
 					on conflict on constraint directory_control_pkey do 
 						update set
-							dir_id = excluded.dir_id  -- Incase the dir_id has changed for the dir_path
+							dir_id = excluded.dir_id  -- In case the dir_id has changed for the dir_path
 							-- Don't update/reschedule any existing directories.
 						where  -- Don't do empty updates
 							t.dir_id <> excluded.dir_id;
@@ -977,9 +984,9 @@ class DirectoryCrawl:
 				$$ LANGUAGE plpgsql;
 			""")
 
-			# schedule_files_in_hash_control
+			# schedule_files_to_hash
 			cur.execute("""
-				create or replace function schedule_files_in_hash_control
+				create or replace function schedule_files_to_hash
 				(
 					_dir_id int
 				) 

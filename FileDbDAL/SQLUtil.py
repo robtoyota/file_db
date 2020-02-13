@@ -149,7 +149,7 @@ class SQLUtil:
 	def install_pg_functions(pg):
 		cur = pg.cursor()
 
-		# Reset DB functions
+		# util_reset_process_tasks - Reset DB functions
 		cur.execute("""
 			-- This function gets run at the beginning of every program startup, to clean data after a crash.
 			create or replace function util_reset_process_tasks()
@@ -183,13 +183,14 @@ class SQLUtil:
 			$$ language plpgsql;
 		""")
 
+		# crawl_frequency_last_ctime_calculate
 		cur.execute("""
 			create or replace function crawl_frequency_last_ctime_calculate
 			(
 				_divide_seconds float, -- Number to divide the number of seconds since the last_ctime by 
 				_min_frequency int default null, -- Highest number of seconds allowed to be returned. null = no limit
 				_max_frequency int default null, -- Lowest number of seconds allowed to be returned. null = no limit  
-				_dir_id int default null -- Which dir to lookup. null = return every dir's newly calculated crawl_frequency 
+				_dir_id int[] default null -- Which dir to lookup. null = return every dir's newly calculated crawl_frequency 
 				-- todo: make _dir_id accept a set of multiple IDs to return, if needed 
 			)
 			returns table
@@ -200,30 +201,38 @@ class SQLUtil:
 			as $$
 			/*
 			* This function divides the number of seconds since the latest ctime of a directory's immediate contents by
-			* the _amplify_seconds input value. 
-			* (it does not evaluate subdirectories' content's ctimes). 
+			* the _divide_seconds input value. 
+			* (it does not evaluate the ctimes of the contents of subdirectories). 
 			*/
 
 			begin
 				return query
 				-- Calculate the new frequency
-				with nf as ( -- New frequency
+				with d as ( -- Get the list of dirs
+					select dc.dir_id, dc.inserted_on  -- if _dir_id is not null: get the requested dirs
+					from
+						directory_control dc
+						join (
+							select unnest(_dir_id) as dir_id
+						) d_id 
+							on (dc.dir_id=d_id.dir_id)
+					union  -- Do not check for a null input with an OR to compare the input to a column.
+					select dc.dir_id, dc.inserted_on  -- if _dir_id is null: get all dirs
+					from
+						directory_control dc
+					where _dir_id is null
+				), 
+				nf as ( -- New frequency
 					select
-						dc.dir_id,
+						d.dir_id,
 						(
-							extract(epoch from (now() - coalesce(la.last_ctime, dc.inserted_on)))  -- Number of seconds since the last crawl
+							extract(epoch from (now() - coalesce(la.last_ctime, d.inserted_on)))  -- Number of seconds since the last crawl
 							/ _divide_seconds  -- Divided by the user-supplied number
 						) as new_frequency
 					from 
-						directory_control dc
+						d
 						join vw_directory_activity_last_ctime as la -- last activity
-							on (dc.dir_id=la.dir_id)
-					where
-						(_dir_id is null)  -- Return all the directories
-						or (
-							_dir_id is not null  -- Only return a specific directory
-							and dc.dir_id = _dir_id
-						)
+							on (d.dir_id=la.dir_id)
 				)
 				-- Apply a check to apply the minimum or maximum value
 				select 
@@ -242,6 +251,36 @@ class SQLUtil:
 			$$ language plpgsql;
 		""")
 
+		# crawl_frequency_last_ctime_calculate - Overload function to accept a single dir_id int
+		cur.execute("""
+			create or replace function crawl_frequency_last_ctime_calculate
+				(
+					_divide_seconds float, -- Number to divide the number of seconds since the last_ctime by 
+					_min_frequency int default null, -- Highest number of seconds allowed to be returned. null = no limit
+					_max_frequency int default null, -- Lowest number of seconds allowed to be returned. null = no limit  
+					_dir_id int default null -- Which dir to lookup. null = return every dir's newly calculated crawl_frequency 
+					-- todo: make _dir_id accept a set of multiple IDs to return, if needed 
+				)
+				returns table
+				(
+					dir_id int,
+					new_frequency int
+				)
+				as $$
+				begin
+					return query
+					select dir_id, new_frequency
+					from crawl_frequency_last_ctime_calculate(
+						_divide_seconds,
+						_min_frequency,
+						_max_frequency,
+						array[_dir_id]::int[]  -- Convert the single value to an array
+					);
+				end
+				$$ language plpgsql;
+		""")
+
+		# crawl_frequency_last_ctime_set
 		cur.execute("""
 			create or replace function crawl_frequency_last_ctime_set
 			(
