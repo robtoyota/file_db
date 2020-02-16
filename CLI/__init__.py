@@ -8,6 +8,7 @@ from API.Search import Search
 import re
 import csv
 import os
+from pandas import DataFrame
 
 from prompt_toolkit import Application
 from prompt_toolkit import PromptSession, HTML
@@ -16,7 +17,8 @@ from prompt_toolkit.completion import NestedCompleter
 
 
 # https://python-prompt-toolkit.readthedocs.io
-class UserInterface():
+class UserInterface:
+	# Present working directory
 	pwd = ''
 	pwd_exists_on_disk = True
 
@@ -143,6 +145,10 @@ class UserInterface():
 
 		return path
 
+	def output_pd(self, dataframe: DataFrame) -> None:
+		dataframe.options.display.max_rows = 50
+		print(dataframe.to_string())
+
 	# Default action if the input is not known
 	def default(self, cmd: str, args: list) -> None:
 		print(f"Command not recognized: {cmd}")
@@ -189,26 +195,33 @@ class UserInterface():
 		path = self.parse_path(args[1])
 		print(f"Searching! {args}")
 
+		# Call the API to return the results
 		if criteria == "name":
-			Search.search_name(self.pg, path)
+			results = Search.search_name(self.pg, path)
 		elif criteria == "name_file":
-			Search.search_name_file(self.pg, path)
+			results = Search.search_name_file(self.pg, path)
 		elif criteria == "name_dir":
-			Search.search_name_dir(self.pg, path)
+			results = Search.search_name_dir(self.pg, path)
 		elif criteria == "hash":
-			Search.search_hash(self.pg, path, None)
+			results = Search.search_hash(self.pg, path, None)
 		elif criteria == "duplicate_file":
-			Search.search_duplicate_file(self.pg, path)
+			results = Search.search_duplicate_file(self.pg, path)
 		elif criteria == "duplicate_dir":
-			Search.search_duplicate_dir(self.pg, path)
+			results = Search.search_duplicate_dir(self.pg, path)
 		elif criteria == "file_size":
-			Search.search_file_size(self.pg, path)
+			results = Search.search_file_size(self.pg, path)
 		elif criteria == "date":
-			Search.search_date(self.pg, path)
+			results = Search.search_date(self.pg, path)
 		elif criteria == "timestamp":
-			Search.search_timestamp(self.pg, path)
+			results = Search.search_timestamp(self.pg, path)
 		elif criteria == "timestamp_range":
-			Search.search_timestamp_range(self.pg, path)
+			results = Search.search_timestamp_range(self.pg, path)
+		else:
+			print("***Error: Please provide a valid criteria to search by")
+			return
+
+		# Output the results
+		print(results)
 
 	# Perform on-demand hashing
 	def do_hash_file(self, path: str) -> None:
