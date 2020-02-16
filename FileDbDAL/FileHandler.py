@@ -157,7 +157,7 @@ class FileHandler:
 						c.move_file, c.overwrite, c.file_hash, c.hash_type, c.file_size, c.perform_hash_check
 					from 
 						upd c
-						left join vw_f f
+						left join vw_file_detail f
 							on (c.file_id=f.id and c.file_id > 0)
 					order by 2;
 				end;

@@ -86,7 +86,7 @@ class SQLUtil:
 			create or replace view vw_ll as -- Reference to *nix "ll" command to list files and directories
 			select
 				'file' as type,
-				dir.dir_path || '\\' || f.name as full_path,
+				path_join(dir.dir_path, f.name) as full_path,
 				f.id as file_id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime,
 				h.md5_hash, h.sha1_hash,
 				dir.dir_path
@@ -109,10 +109,10 @@ class SQLUtil:
 					on (parent.dir_path = basepath(dir.dir_path));
 		""")
 
-		# vw_f: List the file details (full path, file meta data, hashes)
+		# vw_file_detail: List the file details (full path, file meta data, hashes)
 		# TODO: Check if this exists first
 		cur.execute("""
-			create or replace view vw_f as
+			create or replace view vw_file_detail as
 			select
 				path_join(dir.dir_path, f.name) as full_path,
 				f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime,
@@ -126,11 +126,10 @@ class SQLUtil:
 					on (f.id=h.file_id);
 		""")
 
-
 		cur.execute("""
 			create or replace view vw_directory_activity_last_ctime as
 			select dir_id, max(ctime) as last_ctime
-			from vw_ll
+			from vw_ll  -- Check both file and directory metadata
 			group by dir_id;
 		""")
 
@@ -138,7 +137,7 @@ class SQLUtil:
 		cur.execute("""
 			create or replace view vw_directory_activity_last_mtime as
 			select dir_id, max(mtime) as last_mtime
-			from vw_ll
+			from vw_ll  -- Check both file and directory metadata
 			group by dir_id;
 		""")
 		pg.commit()

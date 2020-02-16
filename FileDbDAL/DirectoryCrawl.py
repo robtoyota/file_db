@@ -682,7 +682,7 @@ class DirectoryCrawl:
 						f.full_path, upd.file_id, upd.mtime
 					from
 						upd 
-						join vw_f f  -- The list of files
+						join vw_file_detail f  -- The list of files
 							on (upd.file_id=f.id);
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1003,7 +1003,7 @@ class DirectoryCrawl:
 						dir_id = _dir_id
 						and not exists (
 							select from hash h
-							where h.file_id=vw_f.id
+							where h.file_id=f.id
 						)
 					on conflict on constraint hash_control_pkey do 
 						update set
