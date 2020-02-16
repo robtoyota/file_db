@@ -158,8 +158,11 @@ class SQLUtil:
 				-- Release directories first
 				-- Delete all of the processes' data from the staging tables
 				delete from directory_stage;
-				
+				delete from directory_stage_process;
+				delete from directory_control_process;
 				delete from file_stage;
+				delete from file_stage_process;
+				
 				
 				-- Release the directory_control rows that were assigned to the process
 				update directory_control
@@ -268,13 +271,13 @@ class SQLUtil:
 				as $$
 				begin
 					return query
-					select dir_id, new_frequency
+					select t.dir_id, t.new_frequency
 					from crawl_frequency_last_ctime_calculate(
 						_divide_seconds,
 						_min_frequency,
 						_max_frequency,
 						array[_dir_id]::int[]  -- Convert the single value to an array
-					);
+					) t;
 				end
 				$$ language plpgsql;
 		""")

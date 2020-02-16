@@ -302,10 +302,10 @@ class DirectoryCrawl:
 				psycopg2.extras.execute_values(
 					cur,
 					"""
-						insert into directory_control_stage
+						insert into directory_control_process
 						(dir_id, dir_path, crawled_on, file_count, subdir_count) 
 						values %s
-						on conflict on constraint directory_control_stage_pkey do nothing;
+						on conflict on constraint directory_control_process_pkey do nothing;
 					""",
 					(
 						(
@@ -543,10 +543,10 @@ class DirectoryCrawl:
 
 		if drop_tables:
 			# TODO: Check if this table contains data before dropping
-			cur.execute("drop table if exists directory_control_stage cascade;")
+			cur.execute("drop table if exists directory_control_process cascade;")
 
 		cur.execute("""
-			create unlogged table if not exists directory_control_stage
+			create unlogged table if not exists directory_control_process
 			(
 				dir_id 		int not null,
 				dir_path	text not null,
@@ -913,7 +913,7 @@ class DirectoryCrawl:
 				as $$
 				begin
 					with stg as (
-						delete from directory_control_stage dcs
+						delete from directory_control_process dcs
 						where
 							-- Make sure there are no outstanding files staged
 							not exists (

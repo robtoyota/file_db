@@ -34,7 +34,7 @@ class DuplicateFinder:
 						with dupe_hashes as (  -- Get the list of duplicated hashes
 							select 
 								sha1_hash, size, count(*) as duplicate_count
-							from vw_f
+							from vw_file_detail
 							where 
 								dir_path like %s
 								and size > 0.010  -- 10 KBs
@@ -46,7 +46,7 @@ class DuplicateFinder:
 							f.sha1_hash, f.size, d.duplicate_count,
 							f.full_path, f.name, f.ctime, f.mtime
 						from
-							vw_f f
+							vw_file_detail f
 							join dupe_hashes d
 								on (f.sha1_hash=d.sha1_hash)
 						order by f.sha1_hash
@@ -62,17 +62,17 @@ class DuplicateFinder:
 					if last_hash == row['sha1_hash']:
 						last_hash = row['sha1_hash']
 						duplicate_hashes[row['sha1_hash']] = Hash(
-							sha1_hash = row['sha1_hash'],
-							file_size = row['size'],
-							duplicate_count = row['duplicate_count'],
+							sha1_hash=row['sha1_hash'],
+							file_size=row['size'],
+							duplicate_count=row['duplicate_count'],
 						)
 
 					# Add the duplicate file to the hash's list of files
 					duplicate_hashes[row['sha1_hash']].append_file(
-						full_path = row['full_path'],
-						name = row['name'],
-						ctime = row['ctime'],
-						mtime = row['mtime'],
+						full_path=row['full_path'],
+						name=row['name'],
+						ctime=row['ctime'],
+						mtime=row['mtime'],
 					)
 		except:  # Ugh:
 			print(str(sys.exc_info()))
