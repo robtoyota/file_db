@@ -52,6 +52,7 @@ class Install:
 		# Create the base views (the objects' functions may depend on these views)
 		print("Installing base views...")
 		SQLUtil.install_base_views(pg)
+		SQLUtil.install_pg_base_view_functions(pg)
 
 		# Create the functions related to the objects (these functions might be used in views and FKs)
 		print("Installing functions...")

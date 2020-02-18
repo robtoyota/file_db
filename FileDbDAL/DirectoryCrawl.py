@@ -934,17 +934,21 @@ class DirectoryCrawl:
 							30::float, -- _divide_seconds,
 							round(60*60*0.25)::int, -- _min_frequency,
 							round(60*60*24*7)::int, -- _max_frequency,
-							array[(select dir_id from stg)]::int[] -- _dir_id
+							array(select dir_id from stg)::int[] -- _dir_id
 						)
 					)
 					update directory_control dc
 					set
 						last_crawled = stg.crawled_on,
-						next_crawl = stg.crawled_on + (crawl_frequency || ' seconds')::interval,
+						crawl_frequency = coalesce(schd.new_frequency, dc.crawl_frequency),
+						next_crawl = stg.crawled_on + (coalesce(schd.new_frequency, dc.crawl_frequency) || ' seconds')::interval,
 						file_count = stg.file_count,
 						subdir_count = stg.subdir_count,
 						process_assigned_on	= null
-					from stg
+					from 
+						stg
+						join schd
+							on (stg.dir_id=schd.dir_id)
 					where
 						dc.dir_id=stg.dir_id;
 						

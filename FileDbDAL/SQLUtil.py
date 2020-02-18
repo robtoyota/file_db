@@ -125,23 +125,118 @@ class SQLUtil:
 				left join hash h
 					on (f.id=h.file_id);
 		""")
-
-		cur.execute("""
-			create or replace view vw_directory_activity_last_ctime as
-			select dir_id, max(ctime) as last_ctime
-			from vw_ll  -- Check both file and directory metadata
-			group by dir_id;
-		""")
-
-
-		cur.execute("""
-			create or replace view vw_directory_activity_last_mtime as
-			select dir_id, max(mtime) as last_mtime
-			from vw_ll  -- Check both file and directory metadata
-			group by dir_id;
-		""")
 		pg.commit()
 		cur.close()
+
+	@staticmethod
+	def install_pg_base_view_functions(pg):
+		with pg.cursor() as cur:
+			# View: vwf_dir_contents: Return the file and subdirs of a given directory array
+			cur.execute("""
+				create or replace function vwf_dir_contents
+				(_dir_id int[])
+				returns table 
+				(
+					type text, full_path text, dir_id int, item_id int, name text, 
+					file_size numeric(18, 6), ctime timestamp, mtime timestamp, atime timestamp, 
+					md5_hash text, md5_hash_time timestamp, sha1_hash text, sha1_hash_time timestamp
+				)
+				as $$
+				begin
+					return query
+					with d_id as (
+						select unnest(_dir_id) as dir_id
+					)
+					select
+						'file' as type,
+						path_join(dir.dir_path, f.name) as full_path,
+						f.dir_id, f.id as item_id, f.name, 
+						f.size as file_size, f.ctime, f.mtime, f.atime,
+						h.md5_hash, h.md5_hash_time, h.sha1_hash, h.sha1_hash_time
+					from
+						d_id
+						join directory dir
+							on (dir.id=d_id.dir_id)
+						join file f
+							on (dir.id=f.dir_id)
+						left join hash h
+							on (f.id=h.file_id)
+					union all
+					select
+						'dir' as type,
+						dir.dir_path as full_path,
+						parent.id as dir_id, dir.id as item_id, basename(dir.dir_path) as name, 
+						0 as file_size, dir.ctime, dir.mtime, null as atime,
+						null as md5_hash, null as md5_hash_time, null as sha1_hash, null as sha1_hash_time
+					from
+						d_id
+						join directory parent
+							on (parent.id=d_id.dir_id)
+						join directory dir
+							on (basepath(dir.dir_path)=parent.dir_path);
+				end;
+				$$ language plpgsql;
+			""")
+
+			# View: Overload vwf_dir_contents for int dir_id
+			cur.execute("""
+				create or replace function vwf_dir_contents
+				(_dir_id int)
+				returns table 
+				(
+					type text, full_path text, dir_id int, item_id int, name text, 
+					file_size numeric(18, 6), ctime timestamp, mtime timestamp, atime timestamp, 
+					md5_hash text, md5_hash_time timestamp, sha1_hash text, sha1_hash_time timestamp
+				)  
+				as $$
+				begin
+					return query
+					select * from vwf_dir_contents(array[_dir_id]::int[]);
+				end;
+				$$ language plpgsql; 
+			""")
+
+			# View: Return the latest ctime of all files and directories
+			cur.execute("""
+				create or replace function vwf_directory_activity 
+				(_dir_id int[])
+				returns table 
+				(
+					dir_id int, 
+					first_ctime timestamp,
+					first_mtime timestamp,
+					last_ctime timestamp,
+					last_mtime timestamp
+				)
+				as $$
+				begin
+					return query
+					select 
+						dc.dir_id, 
+						min(dc.ctime) as first_ctime, min(dc.mtime) as first_mtime,
+						max(dc.ctime) as last_ctime, max(dc.mtime) as last_mtime
+					from 
+						vwf_dir_contents(_dir_id) dc
+					group by dc.dir_id;
+				end;
+				$$ language plpgsql;
+			""")
+
+			# View: Overload vwf_directory_activity for int dir_id
+			cur.execute("""
+				create or replace function vwf_directory_activity 
+				(_dir_id int)
+				returns table 
+				(
+					dir_id int, first_ctime timestamp,first_mtime timestamp,last_ctime timestamp,last_mtime timestamp
+				)
+				as $$
+				begin
+					return query
+					select * from vwf_directory_activity(array[_dir_id]::int[]);
+				end;
+				$$ language plpgsql;
+			""")
 
 	# Main method to install utility or common functions
 	@staticmethod
@@ -193,7 +288,6 @@ class SQLUtil:
 				_min_frequency int default null, -- Highest number of seconds allowed to be returned. null = no limit
 				_max_frequency int default null, -- Lowest number of seconds allowed to be returned. null = no limit  
 				_dir_id int[] default null -- Which dir to lookup. null = return every dir's newly calculated crawl_frequency 
-				-- todo: make _dir_id accept a set of multiple IDs to return, if needed 
 			)
 			returns table
 			(
@@ -233,7 +327,7 @@ class SQLUtil:
 						) as new_frequency
 					from 
 						d
-						join vw_directory_activity_last_ctime as la -- last activity
+						join vwf_directory_activity(_dir_id) as la -- last activity
 							on (d.dir_id=la.dir_id)
 				)
 				-- Apply a check to apply the minimum or maximum value
