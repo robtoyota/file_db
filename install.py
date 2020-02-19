@@ -43,7 +43,7 @@ class Install:
 		# Add dirs to crawl
 		print(
 			f"\n{'='*60}"
-			f"\nEnter a directory to add to the crawl schedule (crawls recursively). This will loop to allow you enter"
+			f"\nEnter a directory to add to the crawl schedule (crawls recursively). This will loop to allow you to enter"
 			f"more directories. Leave empty (press [enter]) when done entering dirs."
 			f'\nFor example "C:\\" or "/home/"'
 			f"\n{'='*60}"
