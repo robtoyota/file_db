@@ -947,7 +947,7 @@ class DirectoryCrawl:
 						process_assigned_on	= null
 					from 
 						stg
-						join schd
+						left join schd
 							on (stg.dir_id=schd.dir_id)
 					where
 						dc.dir_id=stg.dir_id;

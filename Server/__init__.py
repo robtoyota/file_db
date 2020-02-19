@@ -67,7 +67,7 @@ class Process:
 
 			### Start up the process to get the list of directories to call
 			# TODO: Make sure that all of these processes get created!
-			# Process to maintain the queue of directories to crawl
+			# Server to maintain the queue of directories to crawl
 			processes += [
 				MP.Process(
 					target=self.manage_crawl_dirs, args=(
@@ -79,7 +79,7 @@ class Process:
 				for i in range(self.process_count['manage_crawl_dirs'])
 			]
 
-			# Process to scrape each subdirectory in the queue
+			# Server to scrape each subdirectory in the queue
 			processes += [
 				MP.Process(
 					target=self.crawl_dir, args=(
@@ -91,7 +91,7 @@ class Process:
 				for i in range(self.process_count['crawl_dir'])
 			]
 
-			# Process to insert the contents of the directories (files and subdirs)
+			# Server to insert the contents of the directories (files and subdirs)
 			processes += [
 				MP.Process(
 					target=self.insert_dir_contents, args=(
@@ -103,7 +103,7 @@ class Process:
 				for i in range(self.process_count['insert_dir_contents'])
 			]
 
-			# Process to finalize the directory crawl within the DB
+			# Server to finalize the directory crawl within the DB
 			processes += [
 				MP.Process(
 					target=self.finalize_dir_contents, args=(
@@ -113,7 +113,7 @@ class Process:
 				for i in range(self.process_count['finalize_dir_contents'])
 			]
 
-			# Process to get the list of files to hash
+			# Server to get the list of files to hash
 			processes += [
 				MP.Process(
 					target=self.manage_hash_queue, args=(
@@ -125,7 +125,7 @@ class Process:
 				for i in range(self.process_count['manage_hash_queue'])
 			]
 
-			# Process to hash each file
+			# Server to hash each file
 			processes += [
 				MP.Process(
 					target=self.hash_files, args=(
@@ -137,7 +137,7 @@ class Process:
 				for i in range(self.process_count['hash_files'])
 			]
 
-			# Process to insert the hashes to the staging table and process them
+			# Server to insert the hashes to the staging table and process them
 			processes += [
 				MP.Process(
 					target=self.load_hashes_into_db, args=(
@@ -149,7 +149,7 @@ class Process:
 				for i in range(self.process_count['load_hashes'])
 			]
 
-			# Process to output debugging data
+			# Server to output debugging data
 			processes += [
 				MP.Process(
 					target=self.output_debug, args=(
@@ -313,7 +313,7 @@ class Process:
 
 					# Reset the timer
 					last_flush = time.time()
-					# Process the dir's contents that were staged
+					# Server the dir's contents that were staged
 					FileDbDAL.DirectoryCrawl.process_staged_dir_contents(pg)
 				except Exception:  # Ugh
 					print("-" * 60)
