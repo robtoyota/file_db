@@ -57,6 +57,7 @@ class Install:
 		print("Installing functions...")
 		Directory.install_pg_functions(pg)
 		File.install_pg_functions(pg)
+		Hash.install_pg_functions(pg)
 		DirectoryCrawl.install_pg_functions(pg)
 		SQLUtil.install_pg_functions(pg)
 		Search.install_pg_functions(pg)
