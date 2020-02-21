@@ -32,6 +32,7 @@ class Search:
 					on (needle.sha1_hash=haystack.sha1_hash and needle.size=haystack.size)
 			where
 				needle.dir_path=basepath(%(_path)s) and needle.name=basename(%(_path)s)
+				and needle.type = 'file' and haystack.type = 'file'
 		"""
 		return pd.read_sql_query(sql, pg, params={'_path': path})  # Execute the search
 

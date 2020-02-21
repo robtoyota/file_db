@@ -109,6 +109,8 @@ class UserInterface:
 			self.do_scrape_dir(args)
 		elif cmd == "view_scrape_schedule":
 			self.do_view_scrape_schedule(args)
+		elif cmd == "hash_file":
+			self.do_hash_file(args)
 		elif cmd == "cd":
 			self.do_cd(args)
 		elif cmd == "pwd":
@@ -224,8 +226,15 @@ class UserInterface:
 		print(results)
 
 	# Perform on-demand hashing
-	def do_hash_file(self, path: str) -> None:
-		Hash.hash_file(self.pg, path)
+	def do_hash_file(self, args: list) -> None:
+		path = self.parse_path(args[0])
+		insert_db = True
+		if len(args) > 1:
+			insert_db = Util.input_parse_bool(args[1])
+
+		h = Hash.hash_file(self.pg, path, insert_db=insert_db)
+		print(f"MD5: {h['md5_hash']}")
+		print(f"SHA-1: {h['sha1_hash']}")
 
 	def do_hash_dir(self, path: str) -> None:
 		Hash.hash_dir(self.pg, path)
