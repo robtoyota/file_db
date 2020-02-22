@@ -327,7 +327,7 @@ class SQLUtil:
 						) as new_frequency
 					from 
 						d
-						join vwf_directory_activity(_dir_id) as la -- last activity
+						left join vwf_directory_activity(_dir_id) as la -- last activity
 							on (d.dir_id=la.dir_id)
 				)
 				-- Apply a check to apply the minimum or maximum value
