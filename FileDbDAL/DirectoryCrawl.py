@@ -37,6 +37,7 @@ class DirectoryCrawl:
 
 		# Data for the scraping queue
 		self.crawled_on = None
+		self.dir_not_found = False
 
 		# Vars to hold scraping content
 		self.subdir_names = []  # Name only
@@ -58,8 +59,7 @@ class DirectoryCrawl:
 		self.inserted_on = db_row['inserted_on'] if 'inserted_on' in db_row else None
 		self.updated_on = db_row['updated_on'] if 'updated_on' in db_row else None
 
-
-	def scrape_dir_contents(self, build_objects=False):
+	def scrape_dir_contents(self, build_objects: bool = False) -> None:
 		try:
 			# Get the list of file and subdir names
 			root, self.subdir_names, self.file_names = next(os.walk(self.dir_path))
@@ -75,7 +75,7 @@ class DirectoryCrawl:
 					self.subdirs[subdir_name] = Directory(os.path.join(self.dir_path, subdir_name))
 					self.subdirs[subdir_name].scrape_metadata()
 		except StopIteration:  # If os.walk fails (unreadable dir)
-			pass
+			self.dir_not_found = True
 
 		# Get the counts
 		self.subdir_count = len(self.subdir_names)  # Will default to 0
@@ -83,12 +83,6 @@ class DirectoryCrawl:
 
 		# Mark when the crawling completed
 		self.crawled_on = datetime.now()
-
-		# print(
-		# 	f"*- Scraped - "
-		# 	f"f: {len(self.files)}; d: {len(self.subdirs)}; {self.dir_path[0]}: (%s)"
-		# 	% (self.dir_path.count('\\'))
-		# )
 
 	def iter_content_files(self):
 		for name, file in self.files.items():
@@ -184,6 +178,7 @@ class DirectoryCrawl:
 				'crawled_on': dc.crawled_on,
 				'file_count': dc.file_count,
 				'subdir_count': dc.subdir_count,
+				'dir_not_found': dc.dir_not_found,
 			}
 
 	@staticmethod
@@ -303,7 +298,7 @@ class DirectoryCrawl:
 					cur,
 					"""
 						insert into directory_control_process
-						(dir_id, dir_path, crawled_on, file_count, subdir_count) 
+						(dir_id, dir_path, crawled_on, file_count, subdir_count, dir_not_found) 
 						values %s
 						on conflict on constraint directory_control_process_pkey do nothing;
 					""",
@@ -314,6 +309,7 @@ class DirectoryCrawl:
 							stage['crawled_on'],
 							stage['file_count'],
 							stage['subdir_count'],
+							stage['dir_not_found'],
 						) for stage in DirectoryCrawl.iter_insert_dir_control_stage_queue(crawled_dirs)
 					),
 					page_size=page_size
@@ -329,11 +325,11 @@ class DirectoryCrawl:
 		with pg.cursor() as cur:
 			try:
 				# Upsert into directory and schedule the crawling of the subdirs
-				cur.execute("select process_staged_dirs()")
+				cur.execute("perform process_staged_dirs()")
 				# Upsert into file and schedule the hashing of the files
-				cur.execute("select process_staged_files()")
+				cur.execute("perform process_staged_files()")
 				# Mark the directories as crawled, so that they can be rescheduled and crawled again
-				cur.execute("select mark_dirs_crawled()")
+				cur.execute("perform mark_dirs_crawled()")
 			except:  # Ugh
 				print(str(sys.exc_info()))
 				traceback.print_exc(file=sys.stdout)
@@ -548,11 +544,12 @@ class DirectoryCrawl:
 		cur.execute("""
 			create unlogged table if not exists directory_control_process
 			(
-				dir_id 		int not null,
-				dir_path	text not null,
-				crawled_on 	timestamp not null,
-				file_count	int default 0,
+				dir_id 			int not null,
+				dir_path		text not null,
+				crawled_on 		timestamp not null,
+				file_count		int default 0,
 				subdir_count	int default 0,	
+				dir_not_found	boolean default false,
 				inserted_on	timestamp not null default now(),
 				primary key(dir_path)
 			);
@@ -912,7 +909,7 @@ class DirectoryCrawl:
 				returns boolean
 				as $$
 				begin
-					with stg as (
+					with stg as (  -- Clear out the staging table and get a list of the dirs to work with
 						delete from directory_control_process dcs
 						where
 							-- Make sure there are no outstanding files staged
@@ -926,17 +923,36 @@ class DirectoryCrawl:
 								where dcs.dir_path=basepath(ds.dir_path)
 							)
 						returning
-							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count
+							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count, dcs.dir_not_found
 					),
-					schd as (  -- Get the new crawling frequency for the dirs 
+					schedule_parent as (  -- Schedule the parent dir of any missing dirs. Missing dir indicates a change in the parent.
+						update directory_control dc
+						set
+							next_crawl = '1900-01-01'  -- Scrape the parent immediately, to avoid wasting time scraping other deleted dirs.
+						from
+							stg
+							join directory d
+								on (stg.dir_id=d.id)
+						where
+							dc.dir_path = basename(d.dir_path)
+							and stg.dir_not_found = true
+					),
+					schd as (  -- Get the new crawling frequency for the dirs
+						-- For dirs that exist: 
 						select dir_id, new_frequency
 						from crawl_frequency_last_ctime_calculate(
 							30::float, -- _divide_seconds,
 							round(60*60*0.25)::int, -- _min_frequency,
 							round(60*60*24*7)::int, -- _max_frequency,
-							array(select dir_id from stg)::int[] -- _dir_id
+							array(select dir_id from stg where dir_not_found=false)::int[] -- _dir_id
 						)
+						-- For dirs that don't exist, try again later
+						union all
+						select dir_id, (60*60*1) as new_frequency
+						from stg
+						where dir_not_found = true
 					)
+					-- Update the crawl frequency of the dirs that just got crawled
 					update directory_control dc
 					set
 						last_crawled = stg.crawled_on,
