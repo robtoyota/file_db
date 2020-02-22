@@ -751,35 +751,25 @@ class DirectoryCrawl:
 						delete from file_stage_process
 						returning dir_id, delete_missing
 					),
-					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
-						delete from file f
-						using stg_process s
-						where 
-							f.dir_id = s.dir_id
-							and s.delete_missing is true  -- Only delete missing files if required
-							and not exists (
-								select from file_stage fs 
-								where 
-									f.dir_id=fs.dir_id 
-									and f.name=fs.name
-							)
-						returning
-							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on
-					),
-					fd_ins as (  -- Backup the deleted files 
-						insert into file_delete as t
-							(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-						select
-							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on, null, now()
-						from
-							del f
-					),
 					stg as (  -- Move rows out of the staging table
 						delete from file_stage fs
 						using stg_process s
 						where fs.dir_id = s.dir_id
 						returning
 							fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
+					),
+					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
+						delete from file f
+						using stg_process s
+						where 
+							f.dir_id = s.dir_id
+							and s.delete_missing is true  -- Only delete missing files if required
+							and not exists (  -- Is this file listed in the staging table?
+								select from stg 
+								where 
+									f.dir_id=stg.dir_id 
+									and f.name=stg.name
+							)
 					),
 					file_ins as (  -- Insert the rows into main table
 						insert into file as f
@@ -869,6 +859,36 @@ class DirectoryCrawl:
 						where basepath(ds.dir_path) = s.parent_dir_path
 						returning
 							dir_path, ctime, mtime
+					),
+					del as (  -- Delete dirs that are not in the staging table, meaning they were not found during the scrape. 
+						delete from directory d
+						using stg_process s
+						where 
+							basepath(d.dir_path) = s.parent_dir_path
+							and s.delete_missing is true  -- Only delete missing files if required
+							and not exists (  -- Is this dir listed in the staging table?
+								select from stg 
+								where d.dir_path=stg.dir_path 
+							)
+						returning
+							d.id, d.dir_path
+					),
+					del_child as (  -- Delete all the subdirs "recursively" of any missing dirs
+						delete from directory d
+						using del
+						where 
+							d.dir_path like del.dir_path || '%'  -- Grab all children
+						returning
+							d.id
+					),
+					del_files as (  -- Delete the files inside the deleted dirs and subdirs
+						delete from file f
+						using (  -- Get the list of dir_id values from the delete CTEs
+								select id from del
+								union
+								select id from del_child
+							) as d
+						where f.dir_id=d.id
 					),
 					dir_ins as (  -- Insert the rows into main table
 						insert into directory as t 
