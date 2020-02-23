@@ -516,6 +516,7 @@ class DirectoryCrawl:
 				process_assigned_on	timestamp default null,	-- When was this assigned to be crawled?
 				last_crawled		timestamp default null,
 				last_active			timestamp default null,
+				dir_missing			boolean default false,  -- If dir cannot be found when trying to scrape it
 				inserted_on 		timestamp not null default now(),
 				primary key(dir_path)
 			);
@@ -532,6 +533,7 @@ class DirectoryCrawl:
 				mtime				timestamp,
 				file_size			numeric(18, 6), -- In MBs
 				process_assigned_on	timestamp default null,	-- When was this assigned to be crawled?
+				file_missing		boolean default false,  -- If file cannot be found when trying to hash
 				inserted_on 		timestamp not null default now(),
 				primary key(file_id)
 			);
@@ -823,30 +825,6 @@ class DirectoryCrawl:
 				returns boolean
 				as $$
 				begin
-					-- TODO: Delete these dirs recursively (delete their subdirs/files)
-					-- Delete dirs that are not in the subdir staging table, meaning they were not found during the scrape.
-					-- TODO: Immitate how proces_staged_files works
-					/*
-					* Commenting this out until drives are stable
-					with del as ( 
-						delete from directory d
-						where
-							basepath(d.dir_path) = _parent_dir_path  -- Only delete subdirs within the parent
-							and not exists (
-								select from directory_stage ds
-								where d.dir_path=ds.dir_path
-							)
-						returning
-							id, dir_path, ctime, mtime, inserted_on, updated_on
-					)
-					insert into directory_delete as t
-						(id, dir_path, ctime, mtime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-					select
-						(id, dir_path, ctime, mtime, inserted_on, updated_on, null, now())
-					from
-						del;
-					*/
-					
 					-- Move (delete) subdirs from staging and upsert into the directory table
 					-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
 					with stg_process as (  -- Work with the rows in the staging process table
@@ -943,19 +921,46 @@ class DirectoryCrawl:
 								where dcs.dir_path=basepath(ds.dir_path)
 							)
 						returning
-							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count, dcs.dir_not_found
+							dcs.dir_id, dcs.dir_path, dcs.crawled_on, dcs.file_count, dcs.subdir_count, dcs.dir_not_found
 					),
 					schedule_parent as (  -- Schedule the parent dir of any missing dirs. Missing dir indicates a change in the parent.
 						update directory_control dc
+						set next_crawl = '1900-01-01'  -- Scrape the parent immediately, to avoid wasting time scraping other deleted dirs.
+						from stg
+						where
+							dc.dir_path = basename(stg.dir_path)
+							and stg.dir_not_found = true
+						returning
+							dc.dir_id as parent_id, stg.dir_id
+					),
+					set_dir_missing as (  -- Update the dir_missing values of children
+						update directory_control dc
 						set
-							next_crawl = '1900-01-01'  -- Scrape the parent immediately, to avoid wasting time scraping other deleted dirs.
+							dir_missing = case
+								-- If the dir was not found, then mark it as not found. Unless this dir has no parent
+								when (
+									stg.dir_not_found  -- dir not found?
+									and not (dc.dir_path=stg.dir_path and pnt.parent_id is not null)  -- And not the root parent
+								) then 
+									true
+								else 
+									false
+								end
 						from
 							stg
-							join directory d
-								on (stg.dir_id=d.id)
+							left join schedule_parent pnt
+								on (stg.dir_id=pnt.dir_id)
 						where
-							dc.dir_path = basename(d.dir_path)
-							and stg.dir_not_found = true
+							dc.dir_path like stg.dir_path || '%'  -- Scraped dir and its children
+							and dc.dir_missing <> case  -- Don't perform empty updates. 
+								when (
+									stg.dir_not_found
+									and not (dc.dir_path=stg.dir_path and pnt.parent_id is not null)
+								) then 
+									true
+								else 
+									false
+								end
 					),
 					schd as (  -- Get the new crawling frequency for the dirs
 						-- For dirs that exist: 
