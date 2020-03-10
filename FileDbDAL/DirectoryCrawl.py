@@ -819,7 +819,7 @@ class DirectoryCrawl:
 				$$ LANGUAGE plpgsql;
 			""")
 
-			# process_staged_subdirs
+			# process_staged_dirs
 			cur.execute("""
 				create or replace function process_staged_dirs()
 				returns boolean
@@ -851,6 +851,7 @@ class DirectoryCrawl:
 						returning
 							d.id, d.dir_path
 					),
+					/*
 					del_child as (  -- Delete all the subdirs "recursively" of any missing dirs
 						delete from directory d
 						using del
@@ -868,6 +869,7 @@ class DirectoryCrawl:
 							) as d
 						where f.dir_id=d.id
 					),
+					*/
 					dir_ins as (  -- Insert the rows into main table
 						insert into directory as t 
 							(dir_path, ctime, mtime)
@@ -923,6 +925,7 @@ class DirectoryCrawl:
 						returning
 							dcs.dir_id, dcs.dir_path, dcs.crawled_on, dcs.file_count, dcs.subdir_count, dcs.dir_not_found
 					),
+					/*
 					schedule_parent as (  -- Schedule the parent dir of any missing dirs. Missing dir indicates a change in the parent.
 						update directory_control dc
 						set next_crawl = '1900-01-01'  -- Scrape the parent immediately, to avoid wasting time scraping other deleted dirs.
@@ -962,6 +965,7 @@ class DirectoryCrawl:
 									false
 								end
 					),
+					*/
 					schd as (  -- Get the new crawling frequency for the dirs
 						-- For dirs that exist: 
 						select dir_id, new_frequency
@@ -973,7 +977,7 @@ class DirectoryCrawl:
 						)
 						-- For dirs that don't exist, try again later
 						union all
-						select dir_id, (60*60*1) as new_frequency
+						select dir_id, (60*60*24*1) as new_frequency
 						from stg
 						where dir_not_found = true
 					)
