@@ -45,11 +45,11 @@ class Process:
 
 		# Set the max seconds before a queue needs to be cleared
 		self.queue_timers = {
-			'manage_crawl_dirs': 15,
-			'insert_dir_contents_timer': 15,
-			'finalize_dir_contents_timer': 15,
-			'manage_hash_queue': 15,
-			'load_hashes_timer': 15,
+			'manage_crawl_dirs': 5,
+			'insert_dir_contents_timer': 5,
+			'finalize_dir_contents_timer': 5,
+			'manage_hash_queue': 5,
+			'load_hashes_timer': 5,
 		}
 
 	def __enter__(self):

@@ -174,3 +174,17 @@ class Directory:
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
+
+
+	@staticmethod
+	def install_pg_triggers(pg):
+		with pg.cursor() as cur:
+			cur.execute("""
+				create or replace function trg_directory_delete()
+				returns trigger
+				as $$
+				begin
+					
+				end;
+				$$ language plpgsql;  
+			""")

@@ -76,3 +76,8 @@ class Install:
 		DirectoryCrawl.install_foreign_keys(pg)
 		Search.install_foreign_keys(pg)
 		FileHandler.install_foreign_keys(pg)
+
+		# Create the triggers on the tables (be conservative with how much work a trigger does, for performance)
+		print("Installing the triggers...")
+		File.install_pg_triggers(pg)
+		Directory.install_pg_triggers(pg)
