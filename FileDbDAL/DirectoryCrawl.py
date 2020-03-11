@@ -856,7 +856,7 @@ class DirectoryCrawl:
 						delete from directory d
 						using del
 						where 
-							d.dir_path like del.dir_path || '%'  -- Grab all children
+							d.dir_path like replace(del.dir_path, '\', '\\') || '%'  -- Grab all children
 						returning
 							d.id
 					),
@@ -954,7 +954,7 @@ class DirectoryCrawl:
 							left join schedule_parent pnt
 								on (stg.dir_id=pnt.dir_id)
 						where
-							dc.dir_path like stg.dir_path || '%'  -- Scraped dir and its children
+							dc.dir_path like replace(stg.dir_path, '\', '\\') || '%'  -- Scraped dir and its children
 							and dc.dir_missing <> case  -- Don't perform empty updates. 
 								when (
 									stg.dir_not_found
