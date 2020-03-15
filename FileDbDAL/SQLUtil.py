@@ -355,7 +355,6 @@ class SQLUtil:
 					_min_frequency int default null, -- Highest number of seconds allowed to be returned. null = no limit
 					_max_frequency int default null, -- Lowest number of seconds allowed to be returned. null = no limit  
 					_dir_id int default null -- Which dir to lookup. null = return every dir's newly calculated crawl_frequency 
-					-- todo: make _dir_id accept a set of multiple IDs to return, if needed 
 				)
 				returns table
 				(
