@@ -121,6 +121,108 @@ class Search:
 				$$ language plpgsql;
 			""")
 
+			# search_full_path(text[])
+			cur.execute("""
+				create or replace function search_full_path
+				(
+					_full_path text[]
+				)
+				returns setof vw_ll
+				as $$
+				begin
+					return query
+					select ll.* 
+					from 
+						vw_ll ll
+						join (select unnest(_full_path) as full_path) fp
+							on (ll.dir_path=basepath(fp.full_path) and ll.name=basename(fp.full_path));
+				end;
+				$$ language plpgsql;
+			""")
+
+			# search_full_path(text)
+			cur.execute("""
+				create or replace function search_full_path
+				(
+					_full_path text
+				)
+				returns setof vw_ll
+				as $$
+				begin
+					return query
+					select * from search_full_path(array[_full_path]::text[]);
+				end;
+				$$ language plpgsql;
+			""")
+
+			# search_file(text[])
+			cur.execute("""
+				create or replace function search_file
+				(
+					_full_path text[]
+				)
+				returns setof vw_file_detail
+				as $$
+				begin
+					return query
+					select f.* 
+					from 
+						vw_file_detail f
+						join (select unnest(_full_path) as full_path) fp
+							on (f.dir_path=basepath(fp.full_path) and f.name=basename(fp.full_path));
+				end;
+				$$ language plpgsql;
+			""")
+
+			# search_file(text)
+			cur.execute("""
+				create or replace function search_file
+				(
+					_full_path text
+				)
+				returns setof vw_file_detail
+				as $$
+				begin
+					return query
+					select * from search_file(array[_full_path]::text[]);
+				end;
+				$$ language plpgsql;
+			""")
+
+			# search_dir(text[])
+			cur.execute("""
+				create or replace function search_dir
+				(
+					_full_path text[]
+				)
+				returns setof directory
+				as $$
+				begin
+					return query
+					select d.*
+					from 
+						directory d
+						join (select unnest(_full_path) as full_path) fp
+							on (d.dir_path=fp.full_path);
+				end;
+				$$ language plpgsql;
+			""")
+
+			# search_dir(text)
+			cur.execute("""
+				create or replace function search_dir
+				(
+					_full_path text
+				)
+				returns setof directory
+				as $$
+				begin
+					return query
+					select * from search_dir(array[_full_path]::text[]);
+				end;
+				$$ language plpgsql;
+			""")
+
 			# search_hash
 			cur.execute("""
 				create or replace function search_hash

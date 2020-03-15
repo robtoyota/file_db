@@ -1065,6 +1065,86 @@ class DirectoryCrawl:
 				$$ LANGUAGE plpgsql;
 			""")
 
+			# delete_file(int[])
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_ids int[]
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with f as (  -- Get the list of files to delete
+						select unnest(_file_ids) as file_id
+					),
+					del_hash as (  -- Delete the hash row
+						delete from hash t
+						using f
+						where t.file_id=f.file_id
+					),
+					del_hash_schd as (  -- Delete the hash control row
+						delete from hash_control t
+						using f
+						where t.file_id=f.file_id
+					)
+					-- Perform the actual file delete
+					delete from file t
+					using f
+					where t.id=f.file_id
+					returning t.id;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(text[])
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_paths text[]
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id 
+					from delete_file(
+						array(select s.id from search_file(_file_paths) s)::int[] -- Get the file_id for the paths					
+					) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(int)
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_id int
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_id]::int[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(text)
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_path text
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_path]::text[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
 			pg.commit()
 			cur.close()
 
