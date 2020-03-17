@@ -1,4 +1,4 @@
-from Process import Process
+from Server import Process
 import sys
 
 from FileDbDAL import Pg

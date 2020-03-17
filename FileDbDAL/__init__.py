@@ -52,6 +52,7 @@ class Install:
 		# Create the base views (the objects' functions may depend on these views)
 		print("Installing base views...")
 		SQLUtil.install_base_views(pg)
+		SQLUtil.install_pg_base_view_functions(pg)
 
 		# Create the functions related to the objects (these functions might be used in views and FKs)
 		print("Installing functions...")
@@ -75,3 +76,8 @@ class Install:
 		DirectoryCrawl.install_foreign_keys(pg)
 		Search.install_foreign_keys(pg)
 		FileHandler.install_foreign_keys(pg)
+
+		# Create the triggers on the tables (be conservative with how much work a trigger does, for performance)
+		print("Installing the triggers...")
+		File.install_pg_triggers(pg)
+		Directory.install_pg_triggers(pg)

@@ -37,6 +37,7 @@ class DirectoryCrawl:
 
 		# Data for the scraping queue
 		self.crawled_on = None
+		self.dir_not_found = False
 
 		# Vars to hold scraping content
 		self.subdir_names = []  # Name only
@@ -58,8 +59,7 @@ class DirectoryCrawl:
 		self.inserted_on = db_row['inserted_on'] if 'inserted_on' in db_row else None
 		self.updated_on = db_row['updated_on'] if 'updated_on' in db_row else None
 
-
-	def scrape_dir_contents(self, build_objects=False):
+	def scrape_dir_contents(self, build_objects: bool = False) -> None:
 		try:
 			# Get the list of file and subdir names
 			root, self.subdir_names, self.file_names = next(os.walk(self.dir_path))
@@ -75,7 +75,7 @@ class DirectoryCrawl:
 					self.subdirs[subdir_name] = Directory(os.path.join(self.dir_path, subdir_name))
 					self.subdirs[subdir_name].scrape_metadata()
 		except StopIteration:  # If os.walk fails (unreadable dir)
-			pass
+			self.dir_not_found = True
 
 		# Get the counts
 		self.subdir_count = len(self.subdir_names)  # Will default to 0
@@ -83,12 +83,6 @@ class DirectoryCrawl:
 
 		# Mark when the crawling completed
 		self.crawled_on = datetime.now()
-
-		# print(
-		# 	f"*- Scraped - "
-		# 	f"f: {len(self.files)}; d: {len(self.subdirs)}; {self.dir_path[0]}: (%s)"
-		# 	% (self.dir_path.count('\\'))
-		# )
 
 	def iter_content_files(self):
 		for name, file in self.files.items():
@@ -184,6 +178,7 @@ class DirectoryCrawl:
 				'crawled_on': dc.crawled_on,
 				'file_count': dc.file_count,
 				'subdir_count': dc.subdir_count,
+				'dir_not_found': dc.dir_not_found,
 			}
 
 	@staticmethod
@@ -302,10 +297,10 @@ class DirectoryCrawl:
 				psycopg2.extras.execute_values(
 					cur,
 					"""
-						insert into directory_control_stage
-						(dir_id, dir_path, crawled_on, file_count, subdir_count) 
+						insert into directory_control_process
+						(dir_id, dir_path, crawled_on, file_count, subdir_count, dir_not_found) 
 						values %s
-						on conflict on constraint directory_control_stage_pkey do nothing;
+						on conflict on constraint directory_control_process_pkey do nothing;
 					""",
 					(
 						(
@@ -314,6 +309,7 @@ class DirectoryCrawl:
 							stage['crawled_on'],
 							stage['file_count'],
 							stage['subdir_count'],
+							stage['dir_not_found'],
 						) for stage in DirectoryCrawl.iter_insert_dir_control_stage_queue(crawled_dirs)
 					),
 					page_size=page_size
@@ -329,11 +325,11 @@ class DirectoryCrawl:
 		with pg.cursor() as cur:
 			try:
 				# Upsert into directory and schedule the crawling of the subdirs
-				cur.execute("select process_staged_dirs()")
+				cur.execute("perform process_staged_dirs()")
 				# Upsert into file and schedule the hashing of the files
-				cur.execute("select process_staged_files()")
+				cur.execute("perform process_staged_files()")
 				# Mark the directories as crawled, so that they can be rescheduled and crawled again
-				cur.execute("select mark_dirs_crawled()")
+				cur.execute("perform mark_dirs_crawled()")
 			except:  # Ugh
 				print(str(sys.exc_info()))
 				traceback.print_exc(file=sys.stdout)
@@ -520,6 +516,7 @@ class DirectoryCrawl:
 				process_assigned_on	timestamp default null,	-- When was this assigned to be crawled?
 				last_crawled		timestamp default null,
 				last_active			timestamp default null,
+				dir_missing			boolean default false,  -- If dir cannot be found when trying to scrape it
 				inserted_on 		timestamp not null default now(),
 				primary key(dir_path)
 			);
@@ -536,6 +533,7 @@ class DirectoryCrawl:
 				mtime				timestamp,
 				file_size			numeric(18, 6), -- In MBs
 				process_assigned_on	timestamp default null,	-- When was this assigned to be crawled?
+				file_missing		boolean default false,  -- If file cannot be found when trying to hash
 				inserted_on 		timestamp not null default now(),
 				primary key(file_id)
 			);
@@ -543,20 +541,49 @@ class DirectoryCrawl:
 
 		if drop_tables:
 			# TODO: Check if this table contains data before dropping
-			cur.execute("drop table if exists directory_control_stage cascade;")
+			cur.execute("drop table if exists directory_control_process cascade;")
 
 		cur.execute("""
-			create unlogged table if not exists directory_control_stage
+			create unlogged table if not exists directory_control_process
 			(
-				dir_id 		int not null,
-				dir_path	text not null,
-				crawled_on 	timestamp not null,
-				file_count	int default 0,
+				dir_id 			int not null,
+				dir_path		text not null,
+				crawled_on 		timestamp not null,
+				file_count		int default 0,
 				subdir_count	int default 0,	
+				dir_not_found	boolean default false,
 				inserted_on	timestamp not null default now(),
 				primary key(dir_path)
 			);
 		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists file_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists file_db_removal_staging
+			(
+				file_id 	int,
+				inserted_on	timestamp not null default now(),
+				primary key(file_id)
+			);
+		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists directory_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists directory_db_removal_staging
+			(
+				dir_id 			int,
+				delete_subdirs	boolean default false,
+				inserted_on		timestamp not null default now(),
+				primary key(dir_id)
+			);
+		""")
+
 		pg.commit()
 		cur.close()
 
@@ -578,6 +605,9 @@ class DirectoryCrawl:
 			create index if not exists hash_control_file_size on hash_control (file_size);
 			create index if not exists hash_control_mtime on hash_control (mtime);
 			create index if not exists hash_control_inserted_on on hash_control (inserted_on);
+			
+			create index if not exists file_db_removal_staging_inserted_on on file_db_removal_staging (inserted_on);
+			create index if not exists directory_db_removal_staging_inserted_on on directory_db_removal_staging (inserted_on);
 		""")
 		pg.commit()
 		cur.close()
@@ -754,35 +784,30 @@ class DirectoryCrawl:
 						delete from file_stage_process
 						returning dir_id, delete_missing
 					),
-					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
-						delete from file f
-						using stg_process s
-						where 
-							f.dir_id = s.dir_id
-							and s.delete_missing is true  -- Only delete missing files if required
-							and not exists (
-								select from file_stage fs 
-								where 
-									f.dir_id=fs.dir_id 
-									and f.name=fs.name
-							)
-						returning
-							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on
-					),
-					fd_ins as (  -- Backup the deleted files 
-						insert into file_delete as t
-							(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-						select
-							f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime, f.inserted_on, f.updated_on, null, now()
-						from
-							del f
-					),
 					stg as (  -- Move rows out of the staging table
 						delete from file_stage fs
 						using stg_process s
 						where fs.dir_id = s.dir_id
 						returning
 							fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
+					),
+					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape.
+						insert into file_db_removal_staging (file_id)  -- This staging table gets processed separately to perform the delete.
+						select distinct f.id
+						from
+							file f
+							join stg_process s
+								on (f.dir_id = s.dir_id)
+						where 
+							s.delete_missing is true  -- Only delete missing files if required
+							and not exists (  -- Is this file listed in the staging table?
+								select from stg 
+								where 
+									f.dir_id=stg.dir_id 
+									and f.name=stg.name
+							)
+						on conflict on constraint file_db_removal_staging_pkey
+							do nothing
 					),
 					file_ins as (  -- Insert the rows into main table
 						insert into file as f
@@ -824,42 +849,18 @@ class DirectoryCrawl:
 							mtime = excluded.mtime
 						where
 							t.mtime <> excluded.mtime;
-	
+					
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
 
-			# process_staged_subdirs
+			# process_staged_dirs
 			cur.execute("""
 				create or replace function process_staged_dirs()
 				returns boolean
 				as $$
 				begin
-					-- TODO: Delete these dirs recursively (delete their subdirs/files)
-					-- Delete dirs that are not in the subdir staging table, meaning they were not found during the scrape.
-					-- TODO: Immitate how proces_staged_files works
-					/*
-					* Commenting this out until drives are stable
-					with del as ( 
-						delete from directory d
-						where
-							basepath(d.dir_path) = _parent_dir_path  -- Only delete subdirs within the parent
-							and not exists (
-								select from directory_stage ds
-								where d.dir_path=ds.dir_path
-							)
-						returning
-							id, dir_path, ctime, mtime, inserted_on, updated_on
-					)
-					insert into directory_delete as t
-						(id, dir_path, ctime, mtime, original_inserted_on, original_updated_on, deleted_on, inserted_on)
-					select
-						(id, dir_path, ctime, mtime, inserted_on, updated_on, null, now())
-					from
-						del;
-					*/
-					
 					-- Move (delete) subdirs from staging and upsert into the directory table
 					-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
 					with stg_process as (  -- Work with the rows in the staging process table
@@ -873,6 +874,38 @@ class DirectoryCrawl:
 						returning
 							dir_path, ctime, mtime
 					),
+					del as (  -- Delete dirs that are not in the staging table, meaning they were not found during the scrape. 
+						delete from directory d
+						using stg_process s
+						where 
+							basepath(d.dir_path) = s.parent_dir_path
+							and s.delete_missing is true  -- Only delete missing files if required
+							and not exists (  -- Is this dir listed in the staging table?
+								select from stg 
+								where d.dir_path=stg.dir_path 
+							)
+						returning
+							d.id, d.dir_path
+					),
+					/*
+					del_child as (  -- Delete all the subdirs "recursively" of any missing dirs
+						delete from directory d
+						using del
+						where 
+							d.dir_path like replace(del.dir_path, '\', '\\') || '%'  -- Grab all children
+						returning
+							d.id
+					),
+					del_files as (  -- Delete the files inside the deleted dirs and subdirs
+						delete from file f
+						using (  -- Get the list of dir_id values from the delete CTEs
+								select id from del
+								union
+								select id from del_child
+							) as d
+						where f.dir_id=d.id
+					),
+					*/
 					dir_ins as (  -- Insert the rows into main table
 						insert into directory as t 
 							(dir_path, ctime, mtime)
@@ -912,8 +945,8 @@ class DirectoryCrawl:
 				returns boolean
 				as $$
 				begin
-					with stg as (
-						delete from directory_control_stage dcs
+					with stg as (  -- Clear out the staging table and get a list of the dirs to work with
+						delete from directory_control_process dcs
 						where
 							-- Make sure there are no outstanding files staged
 							not exists (
@@ -926,25 +959,77 @@ class DirectoryCrawl:
 								where dcs.dir_path=basepath(ds.dir_path)
 							)
 						returning
-							dcs.dir_id, dcs.crawled_on, dcs.file_count, dcs.subdir_count
+							dcs.dir_id, dcs.dir_path, dcs.crawled_on, dcs.file_count, dcs.subdir_count, dcs.dir_not_found
 					),
-					schd as (  -- Get the new crawling frequency for the dirs 
+					/*
+					schedule_parent as (  -- Schedule the parent dir of any missing dirs. Missing dir indicates a change in the parent.
+						update directory_control dc
+						set next_crawl = '1900-01-01'  -- Scrape the parent immediately, to avoid wasting time scraping other deleted dirs.
+						from stg
+						where
+							dc.dir_path = basename(stg.dir_path)
+							and stg.dir_not_found = true
+						returning
+							dc.dir_id as parent_id, stg.dir_id
+					),
+					set_dir_missing as (  -- Update the dir_missing values of children
+						update directory_control dc
+						set
+							dir_missing = case
+								-- If the dir was not found, then mark it as not found. Unless this dir has no parent
+								when (
+									stg.dir_not_found  -- dir not found?
+									and not (dc.dir_path=stg.dir_path and pnt.parent_id is not null)  -- And not the root parent
+								) then 
+									true
+								else 
+									false
+								end
+						from
+							stg
+							left join schedule_parent pnt
+								on (stg.dir_id=pnt.dir_id)
+						where
+							dc.dir_path like replace(stg.dir_path, '\', '\\') || '%'  -- Scraped dir and its children
+							and dc.dir_missing <> case  -- Don't perform empty updates. 
+								when (
+									stg.dir_not_found
+									and not (dc.dir_path=stg.dir_path and pnt.parent_id is not null)
+								) then 
+									true
+								else 
+									false
+								end
+					),
+					*/
+					schd as (  -- Get the new crawling frequency for the dirs
+						-- For dirs that exist: 
 						select dir_id, new_frequency
 						from crawl_frequency_last_ctime_calculate(
 							30::float, -- _divide_seconds,
 							round(60*60*0.25)::int, -- _min_frequency,
 							round(60*60*24*7)::int, -- _max_frequency,
-							array[(select dir_id from stg)]::int[] -- _dir_id
+							array(select dir_id from stg where dir_not_found=false)::int[] -- _dir_id
 						)
+						-- For dirs that don't exist, try again later
+						union all
+						select dir_id, (60*60*24*1) as new_frequency
+						from stg
+						where dir_not_found = true
 					)
+					-- Update the crawl frequency of the dirs that just got crawled
 					update directory_control dc
 					set
 						last_crawled = stg.crawled_on,
-						next_crawl = stg.crawled_on + (crawl_frequency || ' seconds')::interval,
+						crawl_frequency = coalesce(schd.new_frequency, dc.crawl_frequency),
+						next_crawl = stg.crawled_on + (coalesce(schd.new_frequency, dc.crawl_frequency) || ' seconds')::interval,
 						file_count = stg.file_count,
 						subdir_count = stg.subdir_count,
 						process_assigned_on	= null
-					from stg
+					from 
+						stg
+						left join schd
+							on (stg.dir_id=schd.dir_id)
 					where
 						dc.dir_id=stg.dir_id;
 						
@@ -1012,6 +1097,118 @@ class DirectoryCrawl:
 							t.mtime <> excluded.mtime;
 	
 					return true;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(int[])
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_ids int[]
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with f as (  -- Get the list of files to delete
+						select unnest(_file_ids) as file_id
+					),
+					del_hash as (  -- Delete the hash row
+						delete from hash t
+						using f
+						where t.file_id=f.file_id
+					),
+					del_hash_schd as (  -- Delete the hash control row
+						delete from hash_control t
+						using f
+						where t.file_id=f.file_id
+					)
+					-- Perform the actual file delete
+					delete from file t
+					using f
+					where t.id=f.file_id
+					returning t.id;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(text[])
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_paths text[]
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id 
+					from delete_file(
+						array(select s.id from search_file(_file_paths) s)::int[] -- Get the file_id for the paths					
+					) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(int)
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_id int
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_id]::int[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# delete_file(text)
+			cur.execute("""
+				create or replace function delete_file
+				(
+					_file_path text
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_path]::text[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# process_staged_hashes
+			cur.execute("""
+				create or replace function file_db_removal
+				(
+					_row_limit int = 10000
+				)
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with f_id as (  -- Determine which files to delete
+						select file_id
+						from file_db_removal_staging
+						order by inserted_on
+						limit _row_limit
+					),
+					stage as (  -- Delete (and return) the file_ids that need to be run
+						delete from file_db_removal_staging
+						using f_id
+						where file_id=f_id.file_id
+						returning file_id
+					)
+					-- Execute the function to delete the rows
+					select id
+					from delete_file (array(  -- Pass the list of file_ids to the delete_file() function
+						select s.file_id
+						from stage
+					)::int[]);
 				end;
 				$$ LANGUAGE plpgsql;
 			""")

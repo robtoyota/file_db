@@ -2,7 +2,7 @@ from Util.Config import Config
 from prompt_toolkit import prompt
 from FileDbDAL.Pg import Pg
 from psycopg2 import OperationalError
-from Process import Process
+from Server import Process
 
 import os
 
@@ -14,36 +14,36 @@ class Install:
 
 		# Get the connection string, if not already configured
 
-		# print(
-		# 	f"Configure the Postgres connection. You will be prompted for the postgres hostname"
-		# 	f" (commonly 'localhost'), port (commonly 5432), database name, user, and password."
-		# 	f"\nNote: You will need to create the database and user manually, before this install"
-		# )
-		# while True:  # Repeat until successfully connected
-		# 	config['POSTGRES']['host'] = prompt('file_db install: Postgres Hostname> ')
-		# 	config['POSTGRES']['port'] = prompt('file_db install: Postgres Port> ')
-		# 	config['POSTGRES']['dbname'] = prompt('file_db install: Postgres DB Name> ')
-		# 	config['POSTGRES']['user'] = prompt('file_db install: Postgres Username> ')
-		# 	config['POSTGRES']['password'] = prompt('file_db install: Postgres Password> ', is_password=True)
-		#
-		# 	# Test the connection
-		# 	try:
-		# 		with Pg(config) as pg:
-		# 			print("Connected successfully!")
-		# 			break  # Exit the loop
-		# 	except OperationalError:  # If there was an error connecting, then try again
-		# 		print("Error: Unable to connect to Postgres. Please enter the values again.")
-		#
-		# Config.write_config(config, config_file)
-		# with Process(config_file=config_file) as p:
-		# 	# Install the postgres tables, functions, etc
-		# 	p.install_sql()
-		# print("Sucessfully installed the database.")
+		print(
+			f"Configure the Postgres connection. You will be prompted for the postgres hostname"
+			f" (commonly 'localhost'), port (commonly 5432), database name, user, and password."
+			f"\nNote: You will need to create the database and user manually, before this install"
+		)
+		while True:  # Repeat until successfully connected
+			config['POSTGRES']['host'] = prompt('file_db install: Postgres Hostname> ')
+			config['POSTGRES']['port'] = prompt('file_db install: Postgres Port> ')
+			config['POSTGRES']['dbname'] = prompt('file_db install: Postgres DB Name> ')
+			config['POSTGRES']['user'] = prompt('file_db install: Postgres Username> ')
+			config['POSTGRES']['password'] = prompt('file_db install: Postgres Password> ', is_password=True)
+
+			# Test the connection
+			try:
+				with Pg(config) as pg:
+					print("Connected successfully!")
+					break  # Exit the loop
+			except OperationalError:  # If there was an error connecting, then try again
+				print("Error: Unable to connect to Postgres. Please enter the values again.")
+
+		Config.write_config(config, config_file)
+		with Process(config_file=config_file) as p:
+			# Install the postgres tables, functions, etc
+			p.install_sql()
+		print("Sucessfully installed the database.")
 
 		# Add dirs to crawl
 		print(
 			f"\n{'='*60}"
-			f"\nEnter a directory to add to the crawl schedule (crawls recursively). This will loop to allow you enter"
+			f"\nEnter a directory to add to the crawl schedule (crawls recursively). This will loop to allow you to enter"
 			f"more directories. Leave empty (press [enter]) when done entering dirs."
 			f'\nFor example "C:\\" or "/home/"'
 			f"\n{'='*60}"
