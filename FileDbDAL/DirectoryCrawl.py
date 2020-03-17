@@ -778,8 +778,6 @@ class DirectoryCrawl:
 				returns boolean
 				as $$
 				begin
-					create temp table tmp_void (id int null);  -- Temp table to redirect output to 
-					
 					-- Move (delete) files from staging and upsert into the file table
 					-- !! IMPORTANT: Add all column names to all 5 sections below: DELETE, INSERT, SELECT, UPDATE, and WHERE
 					with stg_process as (  -- Work with the rows in the staging process table
@@ -794,23 +792,22 @@ class DirectoryCrawl:
 							fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
 					),
 					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape.
-						select id
-						from delete_file (array(  -- Pass the list of file IDs to the delete_file() function
-							select
-								distinct f.id
-							from
-								file f
-								join stg_process s
-									on (f.dir_id = s.dir_id)
-							where 
-								s.delete_missing is true  -- Only delete missing files if required
-								and not exists (  -- Is this file listed in the staging table?
-									select from stg 
-									where 
-										f.dir_id=stg.dir_id 
-										and f.name=stg.name
-								)
-						)::int[])
+						insert into file_db_removal_staging (file_id)  -- This staging table gets processed separately to perform the delete.
+						select distinct f.id
+						from
+							file f
+							join stg_process s
+								on (f.dir_id = s.dir_id)
+						where 
+							s.delete_missing is true  -- Only delete missing files if required
+							and not exists (  -- Is this file listed in the staging table?
+								select from stg 
+								where 
+									f.dir_id=stg.dir_id 
+									and f.name=stg.name
+							)
+						on conflict on constraint file_db_removal_staging_pkey
+							do nothing
 					),
 					file_ins as (  -- Insert the rows into main table
 						insert into file as f
@@ -833,32 +830,25 @@ class DirectoryCrawl:
 								or f.atime <> excluded.atime
 						returning
 							f.id, f.mtime, f.size
-					),
-					hash_ins as (  -- Schedule the new file for hashing (same as schedule_files_in_hash_control())
-						insert into hash_control as t
-							(file_id, mtime, file_size)
-						select
-							fi.id, fi.mtime, fi.size
-						from
-							file_ins fi
-						where
-							not exists (
-								select from hash h
-								where
-									h.file_id=fi.id
-							)
-						on conflict on constraint hash_control_pkey do 
-							update set
-								mtime = excluded.mtime
-							where
-								t.mtime <> excluded.mtime
 					)
-					-- Force the functions in the CTE to execute (SELECT in a CTE does not execute unless referenced)
-					-- See: https://dba.stackexchange.com/questions/153458;
-					insert into tmp_void
-					select null from del limit 1;
-					
-					drop table tmp_void;
+					-- Schedule the new file for hashing (same as schedule_files_in_hash_control())
+					insert into hash_control as t
+						(file_id, mtime, file_size)
+					select
+						fi.id, fi.mtime, fi.size
+					from
+						file_ins fi
+					where
+						not exists (
+							select from hash h
+							where
+								h.file_id=fi.id
+						)
+					on conflict on constraint hash_control_pkey do 
+						update set
+							mtime = excluded.mtime
+						where
+							t.mtime <> excluded.mtime;
 					
 					return true;
 				end;
