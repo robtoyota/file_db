@@ -605,6 +605,9 @@ class DirectoryCrawl:
 			create index if not exists hash_control_file_size on hash_control (file_size);
 			create index if not exists hash_control_mtime on hash_control (mtime);
 			create index if not exists hash_control_inserted_on on hash_control (inserted_on);
+			
+			create index if not exists file_db_removal_staging_inserted_on on file_db_removal_staging (inserted_on);
+			create index if not exists directory_db_removal_staging_inserted_on on directory_db_removal_staging (inserted_on);
 		""")
 		pg.commit()
 		cur.close()
@@ -1184,6 +1187,38 @@ class DirectoryCrawl:
 				begin
 					return query
 					select t.id from delete_file(array[_file_path]::text[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# process_staged_hashes
+			cur.execute("""
+				create or replace function file_db_removal
+				(
+					_row_limit int = 10000
+				)
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with f_id as (  -- Determine which files to delete
+						select file_id
+						from file_db_removal_staging
+						order by inserted_on
+						limit _row_limit
+					),
+					stage as (  -- Delete (and return) the file_ids that need to be run
+						delete from file_db_removal_staging
+						using f_id
+						where file_id=f_id.file_id
+						returning file_id
+					)
+					-- Execute the function to delete the rows
+					select id
+					from delete_file (array(  -- Pass the list of file_ids to the delete_file() function
+						select s.file_id
+						from stage
+					)::int[]);
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
