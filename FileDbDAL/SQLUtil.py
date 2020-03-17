@@ -73,6 +73,86 @@ class SQLUtil:
 			immutable;
 		""")
 
+		# size-to-byte converter
+		# Use these functions to convert a number (eg 150 KB) to match the file.size value (stored in bytes/100000)
+		cur.execute("""
+			create or replace function kb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size / 1000;
+			end;
+			$$ language plpgsql
+			immutable;
+			
+			create or replace function mb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size / 1;
+			end;
+			$$ language plpgsql
+			immutable;
+			
+			create or replace function gb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size / 0.001;
+			end;
+			$$ language plpgsql
+			immutable;
+			
+			create or replace function tb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size / 0.000001;
+			end;
+			$$ language plpgsql
+			immutable;
+		""")
+
+		# size-to-readable converter
+		# Use these functions to convert a number (eg 150 KB) to match the file.size value (stored in bytes/100000)
+		cur.execute("""
+			create or replace function to_kb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size * 1024 ** -1;
+			end;
+			$$ language plpgsql
+			immutable;
+
+			create or replace function to_mb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size * 1024 ** 0;
+			end;
+			$$ language plpgsql
+			immutable;
+
+			create or replace function to_gb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size * 1024 ** 1;
+			end;
+			$$ language plpgsql
+			immutable;
+
+			create or replace function to_tb(_convert_size float)
+			returns float
+			as $$
+			begin
+				return _convert_size * 1024 ** 2;
+			end;
+			$$ language plpgsql
+			immutable;
+		""")
+
 		pg.commit()
 		cur.close()
 
