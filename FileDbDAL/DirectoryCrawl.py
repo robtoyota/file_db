@@ -556,6 +556,34 @@ class DirectoryCrawl:
 				primary key(dir_path)
 			);
 		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists file_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists file_db_removal_staging
+			(
+				file_id 	int,
+				inserted_on	timestamp not null default now(),
+				primary key(file_id)
+			);
+		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists directory_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists directory_db_removal_staging
+			(
+				dir_id 			int,
+				delete_subdirs	boolean default false,
+				inserted_on		timestamp not null default now(),
+				primary key(dir_id)
+			);
+		""")
+
 		pg.commit()
 		cur.close()
 
