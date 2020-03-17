@@ -556,6 +556,34 @@ class DirectoryCrawl:
 				primary key(dir_path)
 			);
 		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists file_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists file_db_removal_staging
+			(
+				file_id 	int,
+				inserted_on	timestamp not null default now(),
+				primary key(file_id)
+			);
+		""")
+
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists directory_db_removal_staging cascade;")
+
+		cur.execute("""
+			create unlogged table if not exists directory_db_removal_staging
+			(
+				dir_id 			int,
+				delete_subdirs	boolean default false,
+				inserted_on		timestamp not null default now(),
+				primary key(dir_id)
+			);
+		""")
+
 		pg.commit()
 		cur.close()
 
@@ -577,6 +605,9 @@ class DirectoryCrawl:
 			create index if not exists hash_control_file_size on hash_control (file_size);
 			create index if not exists hash_control_mtime on hash_control (mtime);
 			create index if not exists hash_control_inserted_on on hash_control (inserted_on);
+			
+			create index if not exists file_db_removal_staging_inserted_on on file_db_removal_staging (inserted_on);
+			create index if not exists directory_db_removal_staging_inserted_on on directory_db_removal_staging (inserted_on);
 		""")
 		pg.commit()
 		cur.close()
@@ -760,18 +791,23 @@ class DirectoryCrawl:
 						returning
 							fs.name, fs.dir_id, fs.size, fs.ctime, fs.mtime, fs.atime
 					),
-					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape. 
-						delete from file f
-						using stg_process s
+					del as (  -- Delete files that are not in the staging table, meaning they were not found during the scrape.
+						insert into file_db_removal_staging (file_id)  -- This staging table gets processed separately to perform the delete.
+						select distinct f.id
+						from
+							file f
+							join stg_process s
+								on (f.dir_id = s.dir_id)
 						where 
-							f.dir_id = s.dir_id
-							and s.delete_missing is true  -- Only delete missing files if required
+							s.delete_missing is true  -- Only delete missing files if required
 							and not exists (  -- Is this file listed in the staging table?
 								select from stg 
 								where 
 									f.dir_id=stg.dir_id 
 									and f.name=stg.name
 							)
+						on conflict on constraint file_db_removal_staging_pkey
+							do nothing
 					),
 					file_ins as (  -- Insert the rows into main table
 						insert into file as f
@@ -813,7 +849,7 @@ class DirectoryCrawl:
 							mtime = excluded.mtime
 						where
 							t.mtime <> excluded.mtime;
-	
+					
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1141,6 +1177,38 @@ class DirectoryCrawl:
 				begin
 					return query
 					select t.id from delete_file(array[_file_path]::text[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# process_staged_hashes
+			cur.execute("""
+				create or replace function file_db_removal
+				(
+					_row_limit int = 10000
+				)
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with f_id as (  -- Determine which files to delete
+						select file_id
+						from file_db_removal_staging
+						order by inserted_on
+						limit _row_limit
+					),
+					stage as (  -- Delete (and return) the file_ids that need to be run
+						delete from file_db_removal_staging
+						using f_id
+						where file_id=f_id.file_id
+						returning file_id
+					)
+					-- Execute the function to delete the rows
+					select id
+					from delete_file (array(  -- Pass the list of file_ids to the delete_file() function
+						select s.file_id
+						from stage
+					)::int[]);
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
