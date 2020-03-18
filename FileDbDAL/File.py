@@ -218,7 +218,7 @@ class File:
 				returns bool
 				as $$
 				begin
-					if exists (select 1 from vw_ll where dir_path=basepath(_path) and name=basename(_path)) then
+					if exists (select 1 from vw_ll where dir_path=basepath(_path) and name=basename(_path) and type='file') then
 						return true;
 					else 
 						return false;

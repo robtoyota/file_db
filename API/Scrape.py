@@ -22,3 +22,37 @@ class Scrape:
 				(next_crawl, path)
 			)
 		return True
+
+	@staticmethod
+	def delete_file_from_db(pg, path: str) -> bool:
+		path = Util.sql_path_parse_exact_search(path)
+
+		with pg.cursor() as cur:
+			# Call the function to delete the file row
+			cur.execute(
+				"select id from delete_file(%s::text);",
+				(path)
+			)
+
+			# If no ID was returned, it means no row was deleted
+			if not cur.rowcount:
+				return False
+
+			return True
+
+	@staticmethod
+	def delete_dir_from_db(pg, path: str, delete_subdirs: bool = False) -> bool:
+		path = Util.sql_path_parse_exact_search(path)
+
+		with pg.cursor() as cur:
+			# Call the function to delete the directory row
+			cur.execute(
+				"select id from delete_directory(%s::text, %s::bool);",
+				(path, delete_subdirs)
+			)
+
+			# If no ID was returned, it means no row was deleted
+			if not cur.rowcount:
+				return False
+
+			return True
