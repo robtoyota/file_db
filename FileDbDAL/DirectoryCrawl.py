@@ -325,11 +325,11 @@ class DirectoryCrawl:
 		with pg.cursor() as cur:
 			try:
 				# Upsert into directory and schedule the crawling of the subdirs
-				cur.execute("perform process_staged_dirs()")
+				cur.execute("select process_staged_dirs()")
 				# Upsert into file and schedule the hashing of the files
-				cur.execute("perform process_staged_files()")
+				cur.execute("select process_staged_files()")
 				# Mark the directories as crawled, so that they can be rescheduled and crawled again
-				cur.execute("perform mark_dirs_crawled()")
+				cur.execute("select mark_dirs_crawled()")
 			except:  # Ugh
 				print(str(sys.exc_info()))
 				traceback.print_exc(file=sys.stdout)
