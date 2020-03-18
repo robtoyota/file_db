@@ -875,8 +875,8 @@ class DirectoryCrawl:
 							dir_path, ctime, mtime
 					),
 					del as (  -- Delete dirs that are not in the staging table, meaning they were not found during the scrape.
-						insert into directory_db_removal_staging (dir_id, true)  -- This staging table gets processed separately to delete
-						select child.id
+						insert into directory_db_removal_staging (dir_id, delete_subdirs)  -- This staging table gets processed separately to delete
+						select child.id, true -- Delete subdirs
 						from 
 							directory child
 							join stg_process s
@@ -887,8 +887,6 @@ class DirectoryCrawl:
 								select from stg 
 								where child.dir_path=stg.dir_path 
 							)
-						returning
-							d.id, d.dir_path
 					),
 					dir_ins as (  -- Insert the rows into main table
 						insert into directory as t 
