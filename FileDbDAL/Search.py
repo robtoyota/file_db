@@ -134,14 +134,12 @@ class Search:
 					select ll.* 
 					from 
 						vw_ll ll
-						join (select unnest(_full_path) as full_path) fp
+						join (select distinct unnest(_full_path) as full_path) fp
 							on (ll.dir_path=basepath(fp.full_path) and ll.name=basename(fp.full_path));
 				end;
 				$$ language plpgsql;
-			""")
-
-			# search_full_path(text)
-			cur.execute("""
+			
+				-- Accept a single path, and convert it to an array
 				create or replace function search_full_path
 				(
 					_full_path text
@@ -168,14 +166,12 @@ class Search:
 					select f.* 
 					from 
 						vw_file_detail f
-						join (select unnest(_full_path) as full_path) fp
+						join (select distinct unnest(_full_path) as full_path) fp
 							on (f.dir_path=basepath(fp.full_path) and f.name=basename(fp.full_path));
 				end;
 				$$ language plpgsql;
-			""")
-
-			# search_file(text)
-			cur.execute("""
+				
+				-- Accept a single path, and convert it to an array
 				create or replace function search_file
 				(
 					_full_path text
@@ -202,14 +198,12 @@ class Search:
 					select d.*
 					from 
 						directory d
-						join (select unnest(_full_path) as full_path) fp
+						join (select distinct unnest(_full_path) as full_path) fp
 							on (d.dir_path=fp.full_path);
 				end;
 				$$ language plpgsql;
-			""")
-
-			# search_dir(text)
-			cur.execute("""
+			
+				-- Accept a single path, and convert it to an array
 				create or replace function search_dir
 				(
 					_full_path text
