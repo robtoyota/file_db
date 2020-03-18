@@ -887,6 +887,8 @@ class DirectoryCrawl:
 								select from stg 
 								where child.dir_path=stg.dir_path 
 							)
+						on conflict on constraint directory_db_removal_staging_pkey
+							do nothing
 					),
 					dir_ins as (  -- Insert the rows into main table
 						insert into directory as t 
