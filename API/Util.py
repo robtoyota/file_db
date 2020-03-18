@@ -34,6 +34,8 @@ class Util:
 	# Escape existing wildcards and backslashes
 	@staticmethod
 	def sql_path_parse_wildcard_search(path: str) -> str:
+		# !! Important: Update the DB function as well (SQLUtil.py)
+
 		path = path.strip()
 		# Escape back slashes, because this is a pattern, not a literal string
 		path = path.replace("\\", "\\\\")  # A backslash escapes quotes, so raw strings won't support: r'\'
@@ -47,6 +49,8 @@ class Util:
 
 	@staticmethod
 	def sql_path_parse_exact_search(path: str) -> str:
+		# !! Important: Update the DB function as well (SQLUtil.py)
+
 		# Remove trailing slashes (/home/ -> /home). However, allow for drives (stored in the DB as C:\)
 		path = Util.strip_trailing_slashes(path)
 		return path
@@ -156,8 +160,10 @@ class Util:
 		separator = Util.path_separator("".join(path_slices))  # This might be an incomplete path, so check all slices
 		return separator.join(path_slices)
 
+	# Strip any trailing slashes. Eg convert "/home/test/" to "/home/test"
 	@staticmethod
 	def strip_trailing_slashes(path: str) -> str:
+		#  !! Important: Update the DB function as well (SQLUtil.py)
 		path = path.strip()
 		return re.sub(r'([^:])?[\\|/]+$', r'\1', path)
 
