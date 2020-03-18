@@ -1309,17 +1309,65 @@ class DirectoryCrawl:
 						limit _row_limit
 					),
 					stage as (  -- Delete (and return) the file_ids that need to be run
-						delete from file_db_removal_staging
+						delete from file_db_removal_staging t
 						using f_id
-						where file_id=f_id.file_id
+						where t.file_id=f_id.file_id
 						returning file_id
 					)
 					-- Execute the function to delete the rows
 					select id
-					from delete_file (array(  -- Pass the list of file_ids to the delete_file() function
+					from delete_file(array(  -- Pass the list of file_ids to the delete_file() function
 						select s.file_id
 						from stage
 					)::int[]);
+				end;
+				$$ LANGUAGE plpgsql;
+			""")
+
+			# directory_db_removal
+			cur.execute("""
+				create or replace function directory_db_removal
+				(
+					_row_limit int = 10000
+				)
+				returns table (id int)
+				as $$
+				begin
+					return query
+					with d_id as (  -- Determine which dirs to delete
+						select dir_id
+						from directory_db_removal_staging
+						order by inserted_on
+						limit _row_limit
+					),
+					stage as (  -- Delete (and return) the file_ids that need to be run
+						delete from directory_db_removal_staging t
+						using d_id
+						where t.dir_id=d_id.dir_id
+						returning dir_id, delete_subdirs
+					)
+					-- Execute the function to delete the rows
+					-- Process all the rows that want the subdirs deleted
+					select id 
+					from delete_directory(
+						array(  -- Pass the list of dir_ids to the delete_directory() function
+								select s.dir_id
+								from stage
+								where delete_subdirs = true 
+						)::int[],
+						true  -- Delete subdirs						
+					)
+					-- Process the rest of the rows that do not want the subdirs deleted
+					union
+					select id
+					from delete_directory(
+						array(  -- Pass the list of dir_ids to the delete_directory() function
+								select s.dir_id
+								from stage
+								where delete_subdirs = false 
+						)::int[],
+						false  -- Do not delete subdirs
+					);
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
