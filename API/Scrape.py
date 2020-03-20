@@ -31,7 +31,7 @@ class Scrape:
 			# Call the function to delete the file row
 			cur.execute(
 				"select id from delete_file(%s::text);",
-				(path)
+				(path, )
 			)
 
 			# If no ID was returned, it means no row was deleted
