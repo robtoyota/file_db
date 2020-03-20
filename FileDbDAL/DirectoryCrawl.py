@@ -141,8 +141,8 @@ class DirectoryCrawl:
 			on conflict
 				do nothing;
 			""",
-			(self.dir_path,)
-		)
+					(self.dir_path,)
+					)
 
 		pg.commit()
 		cur.close()
@@ -170,7 +170,7 @@ class DirectoryCrawl:
 			yield {'dir_id': dc.dir_id, 'delete_missing': dc.delete_missing}
 
 	@staticmethod
-	def iter_insert_dir_control_stage_queue (crawled_dirs):
+	def iter_insert_dir_control_stage_queue(crawled_dirs):
 		for dc in crawled_dirs:
 			yield {
 				'dir_id': dc.dir_id,
@@ -318,7 +318,8 @@ class DirectoryCrawl:
 		except:  # Ugh
 			print(str(sys.exc_info()))
 			traceback.print_exc(file=sys.stdout)
-		# print(f"*- Staged ({round((time.time() - start_time), 3)})): {self.dir_path}")
+
+	# print(f"*- Staged ({round((time.time() - start_time), 3)})): {self.dir_path}")
 
 	@staticmethod
 	def process_staged_dir_contents(pg):
@@ -369,7 +370,7 @@ class DirectoryCrawl:
 		with pg.cursor() as cur:
 			cur.execute("select process_staged_hashes()")
 
-	def insert_new_directory_to_crawl(self, pg, dir_path, crawl_frequency=(60*60*24*1)):
+	def insert_new_directory_to_crawl(self, pg, dir_path, crawl_frequency=(60 * 60 * 24 * 1)):
 		# Populate the input values
 		self.dir_path = dir_path
 		self.crawl_frequency = crawl_frequency
@@ -387,14 +388,14 @@ class DirectoryCrawl:
 			on conflict on constraint directory_control_dir_path_pkey
 				do nothing  -- If it's already scheduled, then don't meddle with its customized schedule.
 			""",
-			(
-				self.dir_path,
-				self.dir_id,
-				self.file_count,
-				self.subdir_count,
-				self.crawl_frequency
-			)
-		)
+					(
+						self.dir_path,
+						self.dir_id,
+						self.file_count,
+						self.subdir_count,
+						self.crawl_frequency
+					)
+					)
 
 		pg.commit()
 		cur.close()
@@ -418,8 +419,8 @@ class DirectoryCrawl:
 				limit 
 					%s
 				""",
-				(limit,)
-			)
+						(limit,)
+						)
 			# Populate the dirs list with the paths:
 			for row in cur:
 				d = DirectoryCrawl(db_row=row)
@@ -429,11 +430,12 @@ class DirectoryCrawl:
 		return dirs
 
 	@staticmethod
-	def get_dirs_to_crawl(pg, crawl_dir_queue, process_id: int, limit: int=10) -> int:
+	def get_dirs_to_crawl(pg, crawl_dir_queue, process_id: int, limit: int = 10) -> int:
 		# Get the dirs
 		try:
 			with pg.cursor() as cur:
-				cur.execute("select dir_path, last_crawled, dir_id from get_dirs_to_crawl(%s, %s);", (process_id, limit))
+				cur.execute("select dir_path, last_crawled, dir_id from get_dirs_to_crawl(%s, %s);",
+							(process_id, limit))
 				# Populate the dirs list with the paths:
 				dirs = []
 				d = None
@@ -593,7 +595,7 @@ class DirectoryCrawl:
 		cur.execute("""
 			create index if not exists drive_drive on drive (drive);
 			create index if not exists drive_assigned_process_id on drive (assigned_process_id);
-			
+
 			create index if not exists directory_control_dir_id on directory_control (dir_id);
 			create index if not exists directory_control_dir_path on directory_control (dir_path);
 			create index if not exists directory_control_next_crawl on directory_control (next_crawl);
@@ -601,11 +603,11 @@ class DirectoryCrawl:
 			create index if not exists directory_control_last_active on directory_control (last_active);
 			create index if not exists directory_control_assigned_process_id on directory_control (assigned_process_id);
 			create index if not exists directory_control_inserted_on on directory_control (inserted_on);
-			
+
 			create index if not exists hash_control_file_size on hash_control (file_size);
 			create index if not exists hash_control_mtime on hash_control (mtime);
 			create index if not exists hash_control_inserted_on on hash_control (inserted_on);
-			
+
 			create index if not exists file_db_removal_staging_inserted_on on file_db_removal_staging (inserted_on);
 			create index if not exists directory_db_removal_staging_inserted_on on directory_db_removal_staging (inserted_on);
 		""")
@@ -766,7 +768,7 @@ class DirectoryCrawl:
 					select file_id, md5_hash, md5_hash_time, sha1_hash, sha1_hash_time
 					from stage
 					on conflict on constraint hash_file_id_key do nothing;
-	
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -849,7 +851,7 @@ class DirectoryCrawl:
 							mtime = excluded.mtime
 						where
 							t.mtime <> excluded.mtime;
-					
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -917,7 +919,7 @@ class DirectoryCrawl:
 							-- Don't update/reschedule any existing directories.
 						where  -- Don't do empty updates
 							t.dir_id <> excluded.dir_id;
-					
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1016,7 +1018,7 @@ class DirectoryCrawl:
 							on (stg.dir_id=schd.dir_id)
 					where
 						dc.dir_id=stg.dir_id;
-						
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1047,7 +1049,7 @@ class DirectoryCrawl:
 							-- Don't update/reschedule any existing directories.
 						where  -- Don't do empty updates
 							t.dir_id <> excluded.dir_id;
-	
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1079,7 +1081,7 @@ class DirectoryCrawl:
 							mtime = excluded.mtime
 						where
 							t.mtime <> excluded.mtime;
-	
+
 					return true;
 				end;
 				$$ LANGUAGE plpgsql;
@@ -1116,7 +1118,7 @@ class DirectoryCrawl:
 					returning t.id;
 				end;
 				$$ LANGUAGE plpgsql;
-			
+
 				-- Accepts a list of file paths, and looks up the IDs and passes it to the main function
 				create or replace function delete_file
 				(
@@ -1132,7 +1134,7 @@ class DirectoryCrawl:
 					) t;
 				end;
 				$$ LANGUAGE plpgsql;
-			
+
 				-- Accepts a single file ID int, and converts it to an array, and passes it to the main function
 				create or replace function delete_file
 				(
@@ -1145,7 +1147,7 @@ class DirectoryCrawl:
 					select t.id from delete_file(array[_file_id]::int[]) t;
 				end;
 				$$ LANGUAGE plpgsql;
-			
+
 				-- Accepts a single file path, and converts it to an array, and passes it to the function to lookup the IDs
 				create or replace function delete_file
 				(
@@ -1167,49 +1169,82 @@ class DirectoryCrawl:
 				(
 					_dir_ids int[],
 					_delete_subdirs bool = false,
-					_delete_files_immediately bool = true
+					_delete_children_immediately bool = true
 				) 
 				returns table (id int, "type" text)
 				as $$
 				begin
 					return query
+					-- User input
 					with dirs as (  -- Get the list of dirs to delete
 						-- Extract the list of IDs from the input
-						select distinct unnest(_dir_ids) as id
+						select distinct unnest(_dir_ids) as dir_id
 						-- And union in all the subdirs, if required
-						union
+					),
+
+					-- Delete subdirs
+					subdirs as (  -- Get the list of subdirs to delete (if subdirs are meant to be deleted)
 						select subdir.id as dir_id
 						from
 							directory parent
-							join (select distinct unnest(_dir_ids) as id) inp
-								on (parent.id=inp.id)
+							join dirs inp
+								on (parent.id=inp.dir_id)
 							join directory subdir
 								on (subdir.dir_path like sql_path_parse_wildcard_search(parent.dir_path) || '_%')
 						where _delete_subdirs = true
 					),
+					del_subdirs_now as (  -- Delete the subdirs immediately
+						select t.id, t."type"
+						from delete_directory(  -- Pass the delete function the list of IDs
+							array(
+								select sd.dir_id
+								from subdirs sd
+								where _delete_children_immediately = true
+							)::int[],
+							false,  -- No need to delete subdirs, since this selects the subdirs already. Also prevents additional recursion
+							true  -- Yes, continue to delete immediately
+						) t
+						where _delete_subdirs = true  -- Important to reduce unnecessary recursion.
+					),
+					del_subdirs_stg as (  -- ...Or stage subdirs to be deleted (this is more efficient, but relies on the program's server)
+						-- This staging table gets processed separately to perform the delete.
+						insert into directory_db_removal_staging (dir_id, delete_subdirs)
+						select sd.dir_id, false -- Don't enable delete_subdirs, since this already inserts the CURRENT list of subdirs
+						from subdirs sd
+						where _delete_children_immediately = true
+						returning dir_id as id
+					),
+
+					-- Delete files
 					file_ids as (  -- Get the list of file IDs to be deleted
-						select id
+						select f.id
 						from 
 							file f
-							join dirs d
+							join (  -- Get the list of files in subdirs ONLY if this has to be deleted immediately
+								select dir_id from dirs
+								union
+								select dir_id from subdirs where _delete_children_immediately = true
+							) d
 								on (f.dir_id=d.dir_id)
 					),
 					del_files_now as (  -- Delete the files immediately
-						select id
+						select t.id
 						from delete_file(array(  -- Pass the delete function the list of IDs
-							select id
-							from file_ids
-							where _delete_files_immediately = true
-						)::int[])
+							select f.id
+							from file_ids f
+							where _delete_children_immediately = true
+						)::int[]) t
 					),
 					del_files_stg as (  -- ...Or stage files to be deleted (this is more efficient, but relies on the program's server)
 						-- This staging table gets processed separately to perform the delete.
 						insert into file_db_removal_staging (file_id)
-						select id
-						from file_ids
-						where _delete_files_immediately = false
+						select t.id
+						from file_ids t
+						where _delete_children_immediately = false
 						returning file_id as id
 					),
+
+					-- Delete the requested dir itself
 					del_schd as (  -- Delete the directory control row
 						delete from directory_control t
 						using dirs d
@@ -1221,11 +1256,17 @@ class DirectoryCrawl:
 						where t.id=d.dir_id
 						returning t.id
 					)
-					select id, 'dir'::text as "type" from del_dir
+
+					-- Output the IDs that got deleted
+					select t.id, 'dir'::text as "type" from del_dir t
 					union all
-					select id, 'file' from del_files_now  -- This is important in order to get delete_file to execute!
+					select t.id, t."type" from del_subdirs_now t  -- This is important in order to get delete_directory to execute!
 					union all
-					select id, 'file' from del_files_stg_id;
+					select t.id, 'dir' from del_subdirs_stg t
+					union all
+					select t.id, 'file' from del_files_now t  -- This is important in order to get delete_file to execute!
+					union all
+					select t.id, 'file' from del_files_stg t;
 				end;
 				$$ LANGUAGE plpgsql;
 
@@ -1278,7 +1319,7 @@ class DirectoryCrawl:
 
 			# file_db_removal
 			cur.execute("""
-				create or replace function file_db_removal
+				create or replace function db_removal_file
 				(
 					_row_limit int = 10000
 				)
@@ -1296,21 +1337,21 @@ class DirectoryCrawl:
 						delete from file_db_removal_staging t
 						using f_id
 						where t.file_id=f_id.file_id
-						returning file_id
+						returning t.file_id
 					)
 					-- Execute the function to delete the rows
-					select id
+					select t.id
 					from delete_file(array(  -- Pass the list of file_ids to the delete_file() function
-						select s.file_id
+						select file_id
 						from stage
-					)::int[]);
+					)::int[]) t;
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
 
 			# directory_db_removal
 			cur.execute("""
-				create or replace function directory_db_removal
+				create or replace function db_removal_directory
 				(
 					_row_limit int = 10000
 				)
@@ -1328,30 +1369,32 @@ class DirectoryCrawl:
 						delete from directory_db_removal_staging t
 						using d_id
 						where t.dir_id=d_id.dir_id
-						returning dir_id, delete_subdirs
+						returning t.dir_id, t.delete_subdirs
 					)
 					-- Execute the function to delete the rows
 					-- Process all the rows that want the subdirs deleted
-					select id 
+					select t.id
 					from delete_directory(
 						array(  -- Pass the list of dir_ids to the delete_directory() function
-								select s.dir_id
-								from stage
-								where delete_subdirs = true 
+							select dir_id
+							from stage
+							where delete_subdirs = true 
 						)::int[],
-						true  -- Delete subdirs						
-					)
+						true,  -- Delete subdirs
+						false  -- Delete files immediately
+					) t
 					-- Process the rest of the rows that do not want the subdirs deleted
 					union
-					select id
+					select t.id
 					from delete_directory(
 						array(  -- Pass the list of dir_ids to the delete_directory() function
-								select s.dir_id
-								from stage
-								where delete_subdirs = false 
+							select dir_id
+							from stage
+							where delete_subdirs = false 
 						)::int[],
-						false  -- Do not delete subdirs
-					);
+						false,  -- Delete subdirs
+						false  -- Delete files immediately
+					) t;
 				end;
 				$$ LANGUAGE plpgsql;
 			""")
