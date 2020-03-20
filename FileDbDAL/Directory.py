@@ -87,10 +87,10 @@ class Directory:
 		# Install the table for deleted directories
 		if drop_tables:
 			# TODO: Check if this table contains data before dropping
-			cur.execute("drop table if exists directory_delete cascade;")
+			cur.execute("drop table if exists directory_archive cascade;")
 
 		cur.execute("""
-			create table if not exists directory_delete
+			create table if not exists directory_archive
 			(
 				id 				int,
 				dir_path		text not null,		-- Eg: "C:/windows/system32"
@@ -146,11 +146,11 @@ class Directory:
 					create index if not exists directory_mtime on directory (mtime);
 					create index if not exists directory_inserted_on on directory (inserted_on);
 					
-					create index if not exists directory_delete_path_dir_path on directory_delete (basepath(dir_path));
-					create index if not exists directory_delete_ctime on directory_delete (ctime);
-					create index if not exists directory_delete_mtime on directory_delete (mtime);
-					create index if not exists directory_delete_inserted_on on directory_delete (inserted_on);
-					create index if not exists directory_delete_original_inserted_on on directory_delete (original_inserted_on);
+					create index if not exists directory_archive_path_dir_path on directory_archive (basepath(dir_path));
+					create index if not exists directory_archive_ctime on directory_archive (ctime);
+					create index if not exists directory_archive_mtime on directory_archive (mtime);
+					create index if not exists directory_archive_inserted_on on directory_archive (inserted_on);
+					create index if not exists directory_archive_original_inserted_on on directory_archive (original_inserted_on);
 					
 					create index if not exists directory_stage_basepath_dir_path on directory_stage (basepath(dir_path));
 					create index if not exists directory_stage_inserted_by_process_id on directory_stage (inserted_by_process_id);

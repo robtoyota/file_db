@@ -526,5 +526,5 @@ class Process:
 
 	def finalize_copy_file(self, queue_maximums, file_copy_finalize_queue):
 		# Use file_copy_finalize_queue to write back to the DB to delete the rows
-		# Delete rows in the file table when a file got moved (and copy to file_deleted - turn into a trigger?)
+		# Delete rows in the file table when a file got moved (and copy to file_archived - turn into a trigger?)
 		pass
