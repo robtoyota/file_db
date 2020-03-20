@@ -17,11 +17,12 @@ class Process:
 		# Set how many processes should be spawned for each task
 		# TODO: Have a single process spawn multiple threads instead of multiple processes
 		self.process_count = {
-			'user_interface': 1,
 			'manage_crawl_dirs': 1,
 			'crawl_dir': 1,
 			'insert_dir_contents': 1,
 			'finalize_dir_contents': 1,
+			'process_db_removal_file': 1,
+			'process_db_removal_directory': 1,
 			'manage_hash_queue': 1,
 			'hash_files': 1,
 			'load_hashes': 1
@@ -48,6 +49,8 @@ class Process:
 			'manage_crawl_dirs': 5,
 			'insert_dir_contents_timer': 5,
 			'finalize_dir_contents_timer': 5,
+			'process_db_removal_file': 1,
+			'process_db_removal_directory': 1,
 			'manage_hash_queue': 5,
 			'load_hashes_timer': 5,
 		}
@@ -67,7 +70,7 @@ class Process:
 
 			### Start up the process to get the list of directories to call
 			# TODO: Make sure that all of these processes get created!
-			# Server to maintain the queue of directories to crawl
+			# Maintain the queue of directories to crawl
 			processes += [
 				MP.Process(
 					target=self.manage_crawl_dirs, args=(
@@ -79,7 +82,7 @@ class Process:
 				for i in range(self.process_count['manage_crawl_dirs'])
 			]
 
-			# Server to scrape each subdirectory in the queue
+			# Scrape each subdirectory in the queue
 			processes += [
 				MP.Process(
 					target=self.crawl_dir, args=(
@@ -91,7 +94,7 @@ class Process:
 				for i in range(self.process_count['crawl_dir'])
 			]
 
-			# Server to insert the contents of the directories (files and subdirs)
+			# Insert the contents of the directories (files and subdirs)
 			processes += [
 				MP.Process(
 					target=self.insert_dir_contents, args=(
@@ -103,7 +106,7 @@ class Process:
 				for i in range(self.process_count['insert_dir_contents'])
 			]
 
-			# Server to finalize the directory crawl within the DB
+			# Finalize the directory crawl within the DB
 			processes += [
 				MP.Process(
 					target=self.finalize_dir_contents, args=(
@@ -113,7 +116,29 @@ class Process:
 				for i in range(self.process_count['finalize_dir_contents'])
 			]
 
-			# Server to get the list of files to hash
+			# Process the removal of any file rows in the DB that are ready to be deleted
+			processes += [
+				MP.Process(
+					target=self.process_db_removal_file, args=(
+						self.queue_timers['process_db_removal_file'],
+						10000,  # row_limit
+					)
+				)
+				for i in range(self.process_count['process_db_removal_file'])
+			]
+
+			# Process the removal of any directory rows in the DB that are ready to be deleted
+			processes += [
+				MP.Process(
+					target=self.process_db_removal_directory, args=(
+						self.queue_timers['process_db_removal_directory'],
+						10000,  # row_limit
+					)
+				)
+				for i in range(self.process_count['process_db_removal_directory'])
+			]
+
+			# Get the list of files to hash
 			processes += [
 				MP.Process(
 					target=self.manage_hash_queue, args=(
@@ -125,7 +150,7 @@ class Process:
 				for i in range(self.process_count['manage_hash_queue'])
 			]
 
-			# Server to hash each file
+			# Hash each file
 			processes += [
 				MP.Process(
 					target=self.hash_files, args=(
@@ -137,7 +162,7 @@ class Process:
 				for i in range(self.process_count['hash_files'])
 			]
 
-			# Server to insert the hashes to the staging table and process them
+			# Insert the hashes to the staging table and process them
 			processes += [
 				MP.Process(
 					target=self.load_hashes_into_db, args=(
@@ -149,7 +174,7 @@ class Process:
 				for i in range(self.process_count['load_hashes'])
 			]
 
-			# Server to output debugging data
+			# Output debugging data
 			processes += [
 				MP.Process(
 					target=self.output_debug, args=(
@@ -318,6 +343,54 @@ class Process:
 				except Exception:  # Ugh
 					print("-" * 60)
 					print("Exception occurred in finalize_dir_contents")
+					print(str(sys.exc_info()))
+					traceback.print_exc(file=sys.stdout)
+					print("-" * 60)
+					raise
+
+	def process_db_removal_file(self, db_dump_interval: float, row_limit: int = 10000) -> None:
+		# Start the timer
+		last_flush = time.time()
+
+		with FileDbDAL.Pg(self.config) as pg:
+			while True:
+				time.sleep(0.2)  # Give the staging tables time to fill up
+
+				try:
+					if time.time() - last_flush < db_dump_interval:  # Has enough time passed?
+						continue
+
+					# Reset the timer
+					last_flush = time.time()
+					# Server the dir's contents that were staged
+					FileDbDAL.DirectoryCrawl.process_db_removal_file(pg, row_limit)
+				except Exception:  # Ugh
+					print("-" * 60)
+					print("Exception occurred in process_db_removal_file")
+					print(str(sys.exc_info()))
+					traceback.print_exc(file=sys.stdout)
+					print("-" * 60)
+					raise
+
+	def process_db_removal_directory(self, db_dump_interval: float, row_limit: int = 10000) -> None:
+		# Start the timer
+		last_flush = time.time()
+
+		with FileDbDAL.Pg(self.config) as pg:
+			while True:
+				time.sleep(0.2)  # Give the staging tables time to fill up
+
+				try:
+					if time.time() - last_flush < db_dump_interval:  # Has enough time passed?
+						continue
+
+					# Reset the timer
+					last_flush = time.time()
+					# Server the dir's contents that were staged
+					FileDbDAL.DirectoryCrawl.process_db_removal_directory(pg, row_limit)
+				except Exception:  # Ugh
+					print("-" * 60)
+					print("Exception occurred in process_db_removal_directory")
 					print(str(sys.exc_info()))
 					traceback.print_exc(file=sys.stdout)
 					print("-" * 60)
