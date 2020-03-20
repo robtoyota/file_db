@@ -229,16 +229,7 @@ class File:
 
 	@staticmethod
 	def install_pg_triggers(pg):
-		with pg.cursor() as cur:
-			cur.execute("""
-				create or replace function trg_file_delete()
-				returns trigger
-				as $$
-				begin
-
-				end;
-				$$ language plpgsql;  
-			""")
+		pass
 
 	@staticmethod
 	def install_foreign_keys(pg):
