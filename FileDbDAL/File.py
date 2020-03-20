@@ -251,12 +251,20 @@ class File:
 						delete from hash_control t
 						using f
 						where t.file_id=f.file_id
+					),
+					del as (  -- Perform the actual file delete
+						delete from file t
+						using f
+						where t.id=f.file_id
+						returning t.id, t.name, t.dir_id, t.size, t.ctime, t.mtime, t.atime, t.inserted_on, t.updated_on
+					),
+					archive as (  -- Insert the archive
+						insert into file_archive
+							(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on)
+						select t.id, t.name, t.dir_id, t.size, t.ctime, t.mtime, t.atime, t.inserted_on, t.updated_on
+						from del t
 					)
-					-- Perform the actual file delete
-					delete from file t
-					using f
-					where t.id=f.file_id
-					returning t.id;
+					select t.id from del t;
 				end;
 				$$ LANGUAGE plpgsql;
 

@@ -264,11 +264,17 @@ class Directory:
 						using dirs d
 						where d.dir_id=t.dir_id
 					),
-					del_dir as (-- Perform the actual dir delete
+					del_dir as (  -- Perform the actual dir delete
 						delete from directory t
 						using dirs d
 						where t.id=d.dir_id
-						returning t.id
+						returning t.id, t.dir_path, t.ctime, t.mtime, t.inserted_on, t.updated_on
+					),
+					archive as (  -- Copy the deleted row to the archive table
+						insert into directory_archive
+							(id, dir_path, ctime, mtime, original_inserted_on, original_updated_on)
+						select t.id, t.dir_path, t.ctime, t.mtime, t.inserted_on, t.updated_on
+						from del_dir t
 					)
 
 					-- Output the IDs that got deleted
