@@ -126,13 +126,13 @@ class Directory:
 			cur.execute("drop table if exists directory_stage_process cascade;")
 
 		cur.execute("""
-					create unlogged table if not exists directory_stage_process
-					(
-						parent_dir_path	text not null,	-- Eg: "C:/windows/system32"
-						delete_missing	boolean default false,	-- 1 = delete rows in directory if missing from directory_stage
-						primary key (parent_dir_path)
-					);
-				""")
+			create unlogged table if not exists directory_stage_process
+			(
+				parent_dir_path	text not null,	-- Eg: "C:/windows/system32"
+				delete_missing	boolean default false,	-- 1 = delete rows in directory if missing from directory_stage
+				primary key (parent_dir_path)
+			);
+		""")
 
 		pg.commit()
 		cur.close()
@@ -141,19 +141,19 @@ class Directory:
 	def install_indexes(pg):
 		cur = pg.cursor()
 		cur.execute("""
-					create index if not exists directory_path_dir_path on directory (basepath(dir_path));
-					create index if not exists directory_ctime on directory (ctime);
-					create index if not exists directory_mtime on directory (mtime);
-					create index if not exists directory_inserted_on on directory (inserted_on);
-					
-					create index if not exists directory_archive_path_dir_path on directory_archive (basepath(dir_path));
-					create index if not exists directory_archive_ctime on directory_archive (ctime);
-					create index if not exists directory_archive_mtime on directory_archive (mtime);
-					create index if not exists directory_archive_inserted_on on directory_archive (inserted_on);
-					create index if not exists directory_archive_original_inserted_on on directory_archive (original_inserted_on);
-					
-					create index if not exists directory_stage_basepath_dir_path on directory_stage (basepath(dir_path));
-					create index if not exists directory_stage_inserted_by_process_id on directory_stage (inserted_by_process_id);
+			create index if not exists directory_path_dir_path on directory (basepath(dir_path));
+			create index if not exists directory_ctime on directory (ctime);
+			create index if not exists directory_mtime on directory (mtime);
+			create index if not exists directory_inserted_on on directory (inserted_on);
+			
+			create index if not exists directory_archive_path_dir_path on directory_archive (basepath(dir_path));
+			create index if not exists directory_archive_ctime on directory_archive (ctime);
+			create index if not exists directory_archive_mtime on directory_archive (mtime);
+			create index if not exists directory_archive_inserted_on on directory_archive (inserted_on);
+			create index if not exists directory_archive_original_inserted_on on directory_archive (original_inserted_on);
+			
+			create index if not exists directory_stage_basepath_dir_path on directory_stage (basepath(dir_path));
+			create index if not exists directory_stage_inserted_by_process_id on directory_stage (inserted_by_process_id);
 		""")
 		pg.commit()
 		cur.close()
@@ -226,6 +226,7 @@ class Directory:
 						select sd.dir_id, false -- Don't enable delete_subdirs, since this already inserts the CURRENT list of subdirs
 						from subdirs sd
 						where _delete_children_immediately = true
+						on conflict on constraint db_removal_directory_staging_pkey do nothing
 						returning dir_id as id
 					),
 
@@ -255,6 +256,7 @@ class Directory:
 						select t.id
 						from file_ids t
 						where _delete_children_immediately = false
+						on conflict on constraint db_removal_file_staging_pkey do nothing
 						returning file_id as id
 					),
 
