@@ -165,6 +165,20 @@ class File:
 					);
 				""")
 
+		# Install the file category table
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists file_category cascade;")
+
+		cur.execute("""
+			create table if not exists file_category
+			(
+				extension	text not null,
+				category	text not null,
+				primary key (extension, category)
+			);
+		""")
+
 		pg.commit()
 		cur.close()
 
