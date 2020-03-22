@@ -254,14 +254,15 @@ class SQLUtil:
 			select
 				path_join(dir.dir_path, f.name) as full_path,
 				f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime,
-				h.md5_hash, h.sha1_hash,
-				dir.dir_path
+				h.md5_hash, h.sha1_hash, dir.dir_path, fc.category
 			from
 				directory dir
 				join file f
 					on (dir.id=f.dir_id)
 				left join hash h
-					on (f.id=h.file_id);
+					on (f.id=h.file_id)
+				left join file_category fc
+					on (fc.extension=extension(f.name));
 		""")
 		pg.commit()
 		cur.close()
