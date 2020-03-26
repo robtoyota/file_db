@@ -17,15 +17,15 @@ class Process:
 		# Set how many processes should be spawned for each task
 		# TODO: Have a single process spawn multiple threads instead of multiple processes
 		self.process_count = {
-			'manage_crawl_dirs': 1,
-			'crawl_dir': 1,
-			'insert_dir_contents': 1,
-			'finalize_dir_contents': 1,
-			'process_db_removal_file': 1,
-			'process_db_removal_directory': 1,
-			'manage_hash_queue': 1,
-			'hash_files': 1,
-			'load_hashes': 1
+			'manage_crawl_dirs': self.config['SERVER']['THREADS']['manage_crawl_dirs'],
+			'crawl_dir': self.config['SERVER']['THREADS']['crawl_dir'],
+			'insert_dir_contents': self.config['SERVER']['THREADS']['insert_dir_contents'],
+			'finalize_dir_contents': self.config['SERVER']['THREADS']['finalize_dir_contents'],
+			'process_db_removal_file': self.config['SERVER']['THREADS']['process_db_removal_file'],
+			'process_db_removal_directory': self.config['SERVER']['THREADS']['process_db_removal_directory'],
+			'manage_hash_queue': self.config['SERVER']['THREADS']['manage_hash_queue'],
+			'hash_files': self.config['SERVER']['THREADS']['hash_files'],
+			'load_hashes': self.config['SERVER']['THREADS']['load_hashes'],
 		}
 
 		# Build the queues that will be available
@@ -38,10 +38,10 @@ class Process:
 
 		# Set the max size of each queue, relative to the number of processes to be spawned
 		self.queue_maximums = {
-			'crawl_dir_queue': self.process_count['crawl_dir'] * 10000,
-			'insert_dir_contents_queue': self.process_count['insert_dir_contents'] * 10000,
-			'hash_files_queue': self.process_count['hash_files'] * 5000,
-			'load_hashes_queue': self.process_count['load_hashes'] * 50000,  # Max limit forces a dump to DB
+			'crawl_dir_queue': self.config['SERVER']['QUEUE_MAXIMUMS_PER_THREAD']['crawl_dir_queue'] * self.process_count['crawl_dir'],
+			'insert_dir_contents_queue': self.config['SERVER']['QUEUE_MAXIMUMS_PER_THREAD']['insert_dir_contents_queue'] * self.process_count['insert_dir_contents'],
+			'hash_files_queue': self.config['SERVER']['QUEUE_MAXIMUMS_PER_THREAD']['hash_files_queue'] * self.process_count['hash_files'],
+			'load_hashes_queue': self.config['SERVER']['QUEUE_MAXIMUMS_PER_THREAD']['load_hashes_queue'] * self.process_count['load_hashes'],
 		}
 
 		# Set the max seconds before a queue needs to be cleared
