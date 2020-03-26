@@ -1,12 +1,31 @@
 {
-    "POSTGRES": {
-        "host": "localhost",
-        "port": "5432",
-        "dbname": "files_db",
-        "user": "",
-        "password": ""
-    },
-    "CLI": {
-        "default_cwd": "C:\\"
-    }
+	"POSTGRES": {
+		"host": "localhost",
+		"port": "5432",
+		"dbname": "files_db",
+		"user": "",
+		"password": ""
+	},
+	"CLI": {
+		"default_cwd": "C:\\"
+	},
+	"SERVER": {
+		"THREADS": {
+			"manage_crawl_dirs": 1,
+			"crawl_dir": 1,
+			"insert_dir_contents": 1,
+			"finalize_dir_contents": 1,
+			"process_db_removal_file": 1,
+			"process_db_removal_directory": 1,
+			"manage_hash_queue": 1,
+			"hash_files": 1,
+			"load_hashes": 1
+		},
+			"QUEUE_MAXIMUMS_PER_THREAD": {
+			"crawl_dir_queue": 10000,
+			"insert_dir_contents_queue": 10000,
+			"hash_files_queue": 5000,
+			"load_hashes_queue": 50000
+		}
+	}
 }
