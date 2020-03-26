@@ -7,6 +7,6 @@
         "password": ""
     },
     "CLI": {
-        "default_pwd": "C:\\"
+        "default_cwd": "C:\\"
     }
 }

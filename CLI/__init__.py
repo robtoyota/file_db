@@ -29,7 +29,7 @@ class UserInterface:
 		self.pg = pg
 
 		# Config the UI
-		self.do_cd([self.config['CLI']['default_pwd']])
+		self.do_cd([self.config['CLI']['default_cwd']])
 		line_prompt = "file_db> "
 
 		# Get the list of available commands
