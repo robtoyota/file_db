@@ -153,6 +153,64 @@ class SQLUtil:
 			immutable;
 		""")
 
+		# strip_trailing_slashes
+		# Strip any trailing slashes. Eg convert "/home/test/" to "/home/test"
+		cur.execute("""
+			create or replace function strip_trailing_slashes(_path text)
+			returns text
+			as $$
+			begin
+				-- !! Important: Update the Python function as well (Util.py)
+	
+				_path := trim(_path);
+				_path := regexp_replace(_path, '([^:])?[\\|/]+$', '\1');
+				return _path;
+				
+			end;
+			$$ language plpgsql
+			immutable;
+		""")
+
+		# sql_path_parse_wildcard_search
+		# Replace operating system wildcards (* and ?) in a user-supplied file/dir path, to the SQL wildcard (% and _).
+		# Escape existing wildcards and backslashes
+		cur.execute("""
+			create or replace function sql_path_parse_wildcard_search(_path text)
+			returns text
+			as $$
+			begin
+				-- !! Important: Update the Python function as well (Util.py)
+
+				_path := trim(_path);
+				-- Escape back slashes, because this is a pattern, not a literal string
+				_path := replace(_path, '\\', '\\\\');  -- Because this is installed through a Python script, escape lone slashes
+				-- Escape the existing wildcards to avoid accidental use, because they are valid characters in file/dir names
+				_path := replace(_path, '%', '\%');
+				_path := replace(_path, '_', '\_');
+				-- Swap the operating system's wildcards (* and ?) with the SQL wildcards (%/?)
+				_path := replace(_path, '*', '%');
+				_path := replace(_path, '?', '_');
+				return _path;
+			end;
+			$$ language plpgsql
+			immutable;
+		""")
+
+		# sql_path_parse_exact_search
+		cur.execute("""
+			create or replace function sql_path_parse_exact_search(_path text)
+			returns text
+			as $$
+			begin
+				-- !! Important: Update the Python function as well (Util.py)
+
+				_path := strip_trailing_slashes(_path);
+				return _path;
+			end;
+			$$ language plpgsql
+			immutable;
+		""")
+
 		pg.commit()
 		cur.close()
 
@@ -196,14 +254,15 @@ class SQLUtil:
 			select
 				path_join(dir.dir_path, f.name) as full_path,
 				f.id, f.name, f.dir_id, f.size, f.ctime, f.mtime, f.atime,
-				h.md5_hash, h.sha1_hash,
-				dir.dir_path
+				h.md5_hash, h.sha1_hash, dir.dir_path, fc.category
 			from
 				directory dir
 				join file f
 					on (dir.id=f.dir_id)
 				left join hash h
-					on (f.id=h.file_id);
+					on (f.id=h.file_id)
+				left join file_category fc
+					on (fc.extension=extension(f.name));
 		""")
 		pg.commit()
 		cur.close()

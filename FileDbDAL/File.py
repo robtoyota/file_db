@@ -112,10 +112,10 @@ class File:
 		# Install the table for deleted files
 		if drop_tables:
 			# TODO: Check if this table contains data before dropping
-			cur.execute("drop table if exists file_delete cascade;")
+			cur.execute("drop table if exists file_archive cascade;")
 
 		cur.execute("""
-			create table if not exists file_delete
+			create table if not exists file_archive
 			(
 				id 				int,
 				name			text not null, 		-- eg "calc.exe"
@@ -165,6 +165,20 @@ class File:
 					);
 				""")
 
+		# Install the file category table
+		if drop_tables:
+			# TODO: Check if this table contains data before dropping
+			cur.execute("drop table if exists file_category cascade;")
+
+		cur.execute("""
+			create table if not exists file_category
+			(
+				extension	text not null,
+				category	text not null,
+				primary key (extension, category)
+			);
+		""")
+
 		pg.commit()
 		cur.close()
 
@@ -182,15 +196,15 @@ class File:
 			create index if not exists file_updated_on on file (updated_on);
 			create index if not exists file_reverse_name on file (reverse(name));
 			
-			create index if not exists file_delete_name on file_delete (name);
-			create index if not exists file_delete_dir_id on file_delete (dir_id);
-			create index if not exists file_delete_size on file_delete (size);
-			create index if not exists file_delete_ctime on file_delete (ctime);
-			create index if not exists file_delete_mtime on file_delete (mtime);
-			create index if not exists file_delete_atime on file_delete (atime);
-			create index if not exists file_delete_inserted_on on file_delete (inserted_on);
-			create index if not exists file_delete_reverse_name on file_delete (reverse(name));
-			create index if not exists file_delete_original_inserted_on on file_delete (original_inserted_on);
+			create index if not exists file_archive_name on file_archive (name);
+			create index if not exists file_archive_dir_id on file_archive (dir_id);
+			create index if not exists file_archive_size on file_archive (size);
+			create index if not exists file_archive_ctime on file_archive (ctime);
+			create index if not exists file_archive_mtime on file_archive (mtime);
+			create index if not exists file_archive_atime on file_archive (atime);
+			create index if not exists file_archive_inserted_on on file_archive (inserted_on);
+			create index if not exists file_archive_reverse_name on file_archive (reverse(name));
+			create index if not exists file_archive_original_inserted_on on file_archive (original_inserted_on);
 			
 			create index if not exists file_stage_dir_id on file_stage (dir_id);
 			create index if not exists file_stage_inserted_by_process_id on file_stage (inserted_by_process_id);
@@ -202,6 +216,7 @@ class File:
 	def install_pg_functions(pg):
 		"""
 		/*
+
 			add_file
 				upsert
 				if the file is new or has changed, insert into control_hash
@@ -227,18 +242,92 @@ class File:
 				$$ LANGUAGE plpgsql;
 			""")
 
-	@staticmethod
-	def install_pg_triggers(pg):
-		with pg.cursor() as cur:
+			# delete_file, and its overloads
 			cur.execute("""
-				create or replace function trg_file_delete()
-				returns trigger
+				-- Base function. Accepts an array of file ID ints
+				create or replace function delete_file
+				(
+					_file_ids int[]
+				) 
+				returns table (id int)
 				as $$
 				begin
-
+					return query
+					with f as (  -- Get the list of files to delete
+						select distinct unnest(_file_ids) as file_id
+					),
+					del_hash as (  -- Delete the hash row
+						delete from hash t
+						using f
+						where t.file_id=f.file_id
+					),
+					del_hash_schd as (  -- Delete the hash control row
+						delete from hash_control t
+						using f
+						where t.file_id=f.file_id
+					),
+					del as (  -- Perform the actual file delete
+						delete from file t
+						using f
+						where t.id=f.file_id
+						returning t.id, t.name, t.dir_id, t.size, t.ctime, t.mtime, t.atime, t.inserted_on, t.updated_on
+					),
+					archive as (  -- Insert the archive
+						insert into file_archive
+							(id, name, dir_id, size, ctime, mtime, atime, original_inserted_on, original_updated_on)
+						select t.id, t.name, t.dir_id, t.size, t.ctime, t.mtime, t.atime, t.inserted_on, t.updated_on
+						from del t
+					)
+					select t.id from del t;
 				end;
-				$$ language plpgsql;  
+				$$ LANGUAGE plpgsql;
+
+				-- Accepts a list of file paths, and looks up the IDs and passes it to the main function
+				create or replace function delete_file
+				(
+					_file_paths text[]
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id 
+					from delete_file(
+						array(select s.id from search_file(_file_paths) s)::int[] -- Get the file_id for the paths					
+					) t;
+				end;
+				$$ LANGUAGE plpgsql;
+
+				-- Accepts a single file ID int, and converts it to an array, and passes it to the main function
+				create or replace function delete_file
+				(
+					_file_id int
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_id]::int[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
+
+				-- Accepts a single file path, and converts it to an array, and passes it to the function to lookup the IDs
+				create or replace function delete_file
+				(
+					_file_path text
+				) 
+				returns table (id int)
+				as $$
+				begin
+					return query
+					select t.id from delete_file(array[_file_path]::text[]) t;
+				end;
+				$$ LANGUAGE plpgsql;
 			""")
+
+	@staticmethod
+	def install_pg_triggers(pg):
+		pass
 
 	@staticmethod
 	def install_foreign_keys(pg):
