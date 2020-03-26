@@ -3,6 +3,8 @@ import os
 
 
 class Config:
+	# Call these static methods to get a dict returned
+	
 	def __init__(self, config_file_name: str) -> None:
 		self.values = Config.load_config(config_file_name)
 
