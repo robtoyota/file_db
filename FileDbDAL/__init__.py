@@ -19,6 +19,10 @@ class Install:
 		# 	"SQLUtil" can rely on any table, so should always be installed last (except for the "base" DDLs)
 		# 	"Search" can rely on any table or utility function/view so should always be installed last
 
+		# Create the datatypes, to make sure they are available for all tables and functions
+		Directory.install_datatypes(pg)
+		File.install_datatypes(pg)
+
 		# Create the tables (do this first, and afterwards create the dependencies like functions, views, and FKs):
 		print("Installing tables...")
 		Directory.install_tables(pg, drop_tables)

@@ -63,6 +63,23 @@ class Directory:
 		dc.insert_new_directory_to_crawl(pg, self.dir_path)
 
 	@staticmethod
+	def install_datatypes(pg):
+		with pg.cursor() as cur:
+			# directory_detail datatype
+			cur.execute("""
+				do $$ begin
+				create type directory_detail as
+				(
+					id int,
+					dir_path text,
+					ctime timestamp,
+					mtime timestamp
+				);
+				exception when duplicate_object then null;
+				end $$;
+			""")
+
+	@staticmethod
 	def install_tables(pg, drop_tables):
 		cur = pg.cursor()
 

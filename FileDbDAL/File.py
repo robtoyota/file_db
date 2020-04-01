@@ -85,6 +85,29 @@ class File:
 		cur.close()
 
 	@staticmethod
+	def install_datatypes(pg):
+		with pg.cursor() as cur:
+			# file_detail datatype
+			cur.execute("""
+				do $$ begin
+				create type file_detail as
+				(
+					full_path text,
+					id int,
+					file_name text,
+					dir_id int,
+					file_size float,
+					ctime timestamp,
+					mtime timestamp,
+					atime timestamp,
+					md5_hash text,
+					sha1_hash text
+				);
+				exception when duplicate_object then null;
+				end $$;
+			""")
+
+	@staticmethod
 	def install_tables(pg, drop_tables):
 		cur = pg.cursor()
 
