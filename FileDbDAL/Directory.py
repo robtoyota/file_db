@@ -65,10 +65,10 @@ class Directory:
 	@staticmethod
 	def install_datatypes(pg):
 		with pg.cursor() as cur:
-			# directory_detail datatype
+			# base_ins_dir datatype
 			cur.execute("""
 				do $$ begin
-				create type dir_base as
+				create type base_ins_dir as
 				(
 					dir_path text,
 					ctime timestamp,
