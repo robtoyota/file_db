@@ -87,10 +87,10 @@ class File:
 	@staticmethod
 	def install_datatypes(pg):
 		with pg.cursor() as cur:
-			# file_detail datatype
+			# base_ins_file datatype
 			cur.execute("""
 				do $$ begin
-				create type file_base as
+				create type base_ins_file as
 				(
 					full_path text,
 					file_size float,
