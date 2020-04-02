@@ -20,6 +20,7 @@ class Install:
 		# 	"Search" can rely on any table or utility function/view so should always be installed last
 
 		# Create the datatypes, to make sure they are available for all tables and functions
+		print("Installing datatypes")
 		Directory.install_datatypes(pg)
 		File.install_datatypes(pg)
 

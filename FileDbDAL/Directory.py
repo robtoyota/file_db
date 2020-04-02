@@ -68,9 +68,8 @@ class Directory:
 			# directory_detail datatype
 			cur.execute("""
 				do $$ begin
-				create type directory_detail as
+				create type dir_base as
 				(
-					id int,
 					dir_path text,
 					ctime timestamp,
 					mtime timestamp
