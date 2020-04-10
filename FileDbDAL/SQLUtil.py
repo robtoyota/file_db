@@ -264,6 +264,27 @@ class SQLUtil:
 				left join file_category fc
 					on (fc.extension=extension(f.name));
 		""")
+
+		# dir_detail: List the directory details (path, file/subdir count, contents size)
+		cur.execute("""
+			create or replace view dir_detail as
+			select
+				d.id as dir_id, d.dir_path, d.ctime, d.mtime,
+				count(sd.id) as subdirs,
+				count(f.id) as files,
+				sum(coalesce(f.size, 0)) as total_size,
+				min(f.ctime) as first_file_ctime, max(f.ctime) as last_file_ctime,
+				min(f.mtime) as first_file_mtime, max(f.mtime) as last_file_mtime
+			from
+				directory d
+				left join file f
+					on (f.dir_id=d.id)
+				left join directory sd  -- Subdir
+					on (d.dir_path = basepath(sd.dir_path))
+			group by
+				d.id, d.dir_path, d.ctime, d.mtime
+		""")
+
 		pg.commit()
 		cur.close()
 
