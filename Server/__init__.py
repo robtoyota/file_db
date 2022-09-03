@@ -508,8 +508,14 @@ class Process:
 		while True:
 			time.sleep(0.01)
 			output = []
+			queue_name_map = {
+				'crawl_dir_queue': 'crawl_dir',
+				'insert_dir_contents_queue': 'ins_dir',
+				'hash_files_queue': 'hash_file',
+				'load_hashes_queue': 'ins_hash',
+			}
 			for queue_name, queue in queues.items():
-				output.append(f"[{queue_name.replace('_queue', '')}: {queue.qsize()}]")
+				output.append(f"[{queue_name_map.get(queue_name, queue_name)}: {queue.qsize()}]")
 			print(" | ".join(output), end='\r')
 
 	# Manage the FileHandler
